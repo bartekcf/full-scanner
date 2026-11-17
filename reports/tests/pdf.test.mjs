@@ -25,6 +25,28 @@ test('Searchable PDF, Polish characters, numbering and first-page incomplete cov
  assert.doesNotMatch(txt,/\{target\}|\{date\}|undefined|\bNone\b|JSON|potwierdzona luka/)
  assert.match(txt,/U-01/)
 })
+test('Summary heading and findings table stay together on page',async()=>{
+ const url=base.url
+ const definitions=[
+  ['10038','10038-1','Content Security Policy (CSP) Header Not Set'],
+  ['10020','10020-1','Missing Anti-clickjacking Header'],
+  ['90003','90003','Sub Resource Integrity Attribute Missing'],
+  ['10035','10035-1','Strict-Transport-Security Header Not Set'],
+ ]
+ const alerts=definitions.map(([pluginId,alertRef,name])=>({pluginId,alertRef,name,risk:'Medium',confidence:'Low',url,evidence:''}))
+ const model=await prepareModel({...base,findings:[],raw_zap:{alerts}})
+ const pages=(await pdfText(await renderPrepared(model))).split('\f').filter(page=>page.trim())
+ const summaryPage=pages.find(page=>/^\s*Najważniejsze ustalenia\s*$/mu.test(page))
+ assert.ok(summaryPage)
+ const normalized=summaryPage.replace(/\s+/gu,' ')
+for(const text of [
+  'Brak nagłówka polityki bezpieczeństwa',
+  'clickjackingiem',
+  'integralności zewnętrznych',
+  'Brak deklaracji HSTS',
+ ])assert.ok(normalized.includes(text),`Summary table row missing from page: ${text}`)
+})
+
 
 test('Sandbox rejects network and arbitrary filesystem reads',async()=>{
  const script=`import {restrictRendererIO} from './renderer-sandbox.mjs'; import fs from 'node:fs'; import http from 'node:http'; import net from 'node:net'; import dns from 'node:dns'; restrictRendererIO(); let blocked=0; for (const f of [()=>http.get('http://127.0.0.1/'),()=>net.connect(80,'127.0.0.1'),()=>dns.lookup('example.org'),()=>fetch('https://example.org'),()=>fs.readFileSync('/etc/passwd')]){try{f()}catch{blocked++}}; console.log(blocked)`

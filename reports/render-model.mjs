@@ -74,6 +74,7 @@ function dataTable(headers, rows, widths) {
   return {
     table: {
       headerRows: 1,
+      keepWithHeaderRows: 1,
       dontBreakRows: true,
       widths,
       body: [
@@ -529,18 +530,21 @@ export function documentDefinition(model) {
     })
   }
   if (model.summary.important_rows.length) {
-    nodes.push(
-      { text: copy.summary_headings[1], style: "pageTitle", headlineLevel: 2 },
-      dataTable(
-        ["Obszar", "Zaobserwowany element", "Zalecane działanie"],
-        model.summary.important_rows.map(row => [
-          row.area,
-          row.title,
-          `${row.recommendation} (${row.number})`,
-        ]),
-        ["25%", "35%", "40%"]
-      )
-    )
+    nodes.push({
+      unbreakable: true,
+      stack: [
+        { text: copy.summary_headings[1], style: "pageTitle", headlineLevel: 2 },
+        dataTable(
+          ["Obszar", "Zaobserwowany element", "Zalecane działanie"],
+          model.summary.important_rows.map(row => [
+            row.area,
+            row.title,
+            `${row.recommendation} (${row.number})`,
+          ]),
+          ["25%", "35%", "40%"]
+        ),
+      ],
+    })
     if (model.findings.length > model.summary.important_rows.length) {
       nodes.push(
         paragraph(

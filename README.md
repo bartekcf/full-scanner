@@ -128,3 +128,58 @@ Raport zawiera podsumowanie, wszystkie główne ustalenia z numerami U-01…,
 obserwacje techniczne, kandydatów CVE, zakres kontroli, ograniczenia i dane
 wykonawcy. Długie listy wystąpień są grupowane z reprezentatywnymi przykładami
 i podaną liczbą. Generator nie zapisuje JSON-ów w katalogu PDF.
+
+## HTTP API
+
+API działa w osobnym kontenerze i uruchamia istniejący CLI skanera; `app/cli.py`
+pozostaje bez zmian. W `.env` ustaw jeden losowy token współdzielony przez API
+i front:
+
+```sh
+openssl rand -hex 32
+```
+
+Wynik zapisz jako `API_TOKEN`. API nie filtruje originów; dla frontów działających
+w przeglądarce udostępnia `Access-Control-Allow-Origin: *`, więc nie trzeba
+konfigurować listy domen. Uruchomienie:
+
+```sh
+docker compose up -d --build api nginx certbot
+```
+
+Nginx wystawia porty `80/443`, a Certbot automatycznie pobiera i odnawia TLS
+dla `https://vps-4f804552.vps.ovh.ca/`. DNS tej nazwy musi wskazywać na ten VPS,
+a porty `80` i `443` muszą być otwarte w firewallu OVH i VPS. API pozostaje
+dostępne lokalnie na `127.0.0.1:8080`. Pierwsze wydanie certyfikatu trwa chwilę;
+sprawdzisz je poleceniem `docker compose logs -f certbot nginx`.
+
+Jeśli domena ma wskazywać inny VPS, zmień jej adres DNS i `API_DOMAIN`/`server_name`
+w plikach `docker-compose.yml` i `proxy/*.conf`.
+Oba endpointy przyjmują `POST` z JSON-em `{"domain":"example.com"}`. Podaj sam
+publiczny hostname, bez schematu, portu ani ścieżki:
+
+- `POST /api/v1/scan/json` — wynik skanera jako JSON.
+- `POST /api/v1/scan/pdf` — PDF z istniejącego generatora raportów.
+
+Każde żądanie skanowania wymaga nagłówka `X-API-Token` z wartością `API_TOKEN`.
+Przykład:
+
+```sh
+curl https://vps-4f804552.vps.ovh.ca/api/v1/scan/json \
+  -H 'Content-Type: application/json' \
+  -H 'X-API-Token: <API_TOKEN>' \
+  -d '{"domain":"example.com"}'
+
+curl https://vps-4f804552.vps.ovh.ca/api/v1/scan/pdf \
+  -H 'Content-Type: application/json' \
+  -H 'X-API-Token: <API_TOKEN>' \
+  -d '{"domain":"example.com"}' -o raport.pdf
+```
+
+Limit: 5 rozpoczętych skanów na hostname w ruchomym oknie 60 minut. Licznik
+jest zapisany w `output/api-rate-limit.sqlite3` i przeżywa restart kontenera.
+W danej chwili działa jeden skan; następne żądanie dostaje `503 scanner_busy`.
+Nieudana próba po przyjęciu żądania również zużywa limit.
+
+Token umieszczony w publicznym kodzie frontu jest widoczny dla jego użytkowników;
+wspólny token nie zapewnia osobnej autoryzacji dla poszczególnych frontów.

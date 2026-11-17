@@ -1,4 +1,4 @@
-FROM python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
+FROM python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 AS scanner
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
@@ -31,3 +31,20 @@ COPY app ./app
 USER 10001:10001
 ENTRYPOINT ["python", "-m", "app.cli"]
 CMD ["--help"]
+FROM node:22.18.0-bookworm-slim AS report-runtime
+WORKDIR /reports
+COPY reports/package.json reports/package-lock.json ./
+RUN npm ci --omit=dev
+
+FROM scanner AS api
+USER root
+COPY --from=report-runtime /usr/local/bin/node /usr/local/bin/node
+COPY --from=report-runtime /reports/node_modules ./reports/node_modules
+COPY reports/generate.mjs reports/pipeline.mjs reports/prepare.py reports/render-model.mjs reports/render-worker.mjs reports/renderer-sandbox.mjs ./reports/
+COPY reports/reporting ./reports/reporting
+COPY knowledge ./knowledge
+COPY api ./api
+RUN pip install --no-cache-dir -r api/requirements.txt
+USER 10001:10001
+ENTRYPOINT ["uvicorn", "api.server:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1", "--limit-concurrency", "8"]
+CMD []

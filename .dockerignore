@@ -3,4 +3,4 @@ output
 input
 .git
 
-reports
+reports/node_modules

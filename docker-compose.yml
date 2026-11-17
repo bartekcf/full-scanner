@@ -30,7 +30,7 @@ services:
       context: .
       dockerfile: egress/Dockerfile
     environment:
-      EGRESS_API_CLIENT_CIDR: ${SCANNER_EGRESS_API_PREFIX:-172.31.250}.2/32
+      EGRESS_API_CLIENT_CIDR: "${SCANNER_EGRESS_API_PREFIX:-172.31.250}.2/32 ${SCANNER_EGRESS_API_PREFIX:-172.31.250}.4/32"
       EGRESS_ZAP_CLIENT_CIDR: ${SCANNER_EGRESS_ZAP_PREFIX:-172.31.251}.2/32
       EGRESS_DNS_SERVER: ${SCANNER_DNS_PREFIX:-172.31.253}.2
     networks:
@@ -70,7 +70,7 @@ services:
     - -config
     - api.disablekey=false
     - -config
-    - api.addrs.addr.name=^(${SCANNER_API_PREFIX:-172.31.252}\.2|${SCANNER_API_PREFIX:-172.31.252}\.3|127\.0\.0\.1)$
+    - api.addrs.addr.name=^(${SCANNER_API_PREFIX:-172.31.252}\.2|${SCANNER_API_PREFIX:-172.31.252}\.3|${SCANNER_API_PREFIX:-172.31.252}\.4|127\.0\.0\.1)$
     - -config
     - api.addrs.addr.regex=true
     environment:
@@ -109,6 +109,7 @@ services:
   scanner:
     build:
       context: .
+      target: scanner
     depends_on:
       zap:
         condition: service_healthy
@@ -164,6 +165,158 @@ services:
     profiles:
     - cli
     user: ${LOCAL_UID:-1000}:${LOCAL_GID:-1000}
+  api:
+    build:
+      context: .
+      target: api
+    depends_on:
+      zap:
+        condition: service_healthy
+      dns:
+        condition: service_started
+      egress:
+        condition: service_healthy
+    networks:
+      api_egress:
+        ipv4_address: ${SCANNER_EGRESS_API_PREFIX:-172.31.250}.4
+      zap_api:
+        ipv4_address: ${SCANNER_API_PREFIX:-172.31.252}.4
+      dns_internal:
+        ipv4_address: ${SCANNER_DNS_PREFIX:-172.31.253}.6
+      api_proxy: {}
+    dns:
+    - ${SCANNER_DNS_PREFIX:-172.31.253}.2
+    environment:
+      ZAP_API_URL: http://${SCANNER_API_PREFIX:-172.31.252}.3:8080
+      ZAP_PROXY_URL: http://${SCANNER_API_PREFIX:-172.31.252}.3:8080
+      ZAP_API_KEY: ${ZAP_API_KEY:?Set ZAP_API_KEY in .env}
+      ZAP_EGRESS_ISOLATION: proxy_only
+      EGRESS_PROXY_URL: http://${SCANNER_EGRESS_API_PREFIX:-172.31.250}.3:3128
+      TARGET_TIMEOUT_SECONDS: ${TARGET_TIMEOUT_SECONDS:-30}
+      PASSIVE_SCAN_TIMEOUT_SECONDS: ${PASSIVE_SCAN_TIMEOUT_SECONDS:-45}
+      DNS_TIMEOUT_SECONDS: ${DNS_TIMEOUT_SECONDS:-5}
+      MAX_RESPONSE_BYTES: ${MAX_RESPONSE_BYTES:-2000000}
+      CVE_CACHE_PATH: /output/.cve-cache.sqlite3
+      NVD_API_KEY: ${NVD_API_KEY:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      ENABLE_PROJECTDISCOVERY_HTTPX: ${ENABLE_PROJECTDISCOVERY_HTTPX:-true}
+      ENABLE_BOUNDED_HTTP_FINGERPRINT: ${ENABLE_BOUNDED_HTTP_FINGERPRINT:-true}
+      FINGERPRINT_TOOL_TIMEOUT_SECONDS: ${FINGERPRINT_TOOL_TIMEOUT_SECONDS:-15}
+      API_TOKEN: ${API_TOKEN:?Set API_TOKEN in .env}
+      API_SCAN_OUTPUT_DIR: /output
+      API_RATE_LIMIT_DB: /output/api-rate-limit.sqlite3
+      API_SCAN_TIMEOUT_SECONDS: ${API_SCAN_TIMEOUT_SECONDS:-900}
+      API_PDF_TIMEOUT_SECONDS: ${API_PDF_TIMEOUT_SECONDS:-180}
+    init: true
+    read_only: true
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=256m
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    mem_limit: 1g
+    cpus: 1.0
+    pids_limit: 100
+    ports:
+    - "${API_BIND_ADDRESS:-127.0.0.1}:${API_PORT:-8080}:8080"
+    volumes:
+    - ./output:/output
+    restart: unless-stopped
+    healthcheck:
+      test:
+      - CMD
+      - python
+      - -c
+      - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    user: ${LOCAL_UID:-1000}:${LOCAL_GID:-1000}
+  nginx:
+    init: true
+    build:
+      context: .
+      dockerfile: proxy/Dockerfile
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      API_DOMAIN: vps-4f804552.vps.ovh.ca
+    networks:
+      api_proxy: {}
+      internet: {}
+    ports:
+    - "80:80"
+    - "443:443"
+    volumes:
+    - letsencrypt:/etc/letsencrypt
+    - certbot-webroot:/var/www/certbot
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=16m
+    - /var/run:rw,nosuid,nodev,size=1m,mode=1777
+    - /var/cache/nginx:rw,noexec,nosuid,size=64m,mode=1777
+    - /etc/nginx/conf.d:rw,noexec,nosuid,size=1m,mode=1777
+    cap_drop:
+    - ALL
+    cap_add:
+    - NET_BIND_SERVICE
+    - SETUID
+    - SETGID
+    - CHOWN
+    security_opt:
+    - no-new-privileges:true
+    cpus: 0.25
+    mem_limit: 128m
+    pids_limit: 64
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+  certbot:
+    init: true
+    image: certbot/certbot@sha256:c5698da859429ccee0fcc299a8000368198222d1f9e789ab6e388b491e8ce06d
+    depends_on:
+      nginx:
+        condition: service_started
+    environment:
+      API_DOMAIN: vps-4f804552.vps.ovh.ca
+    networks:
+      internet: {}
+    volumes:
+    - letsencrypt:/etc/letsencrypt
+    - certbot-webroot:/var/www/certbot
+    - certbot-lib:/var/lib/letsencrypt
+    - certbot-log:/var/log/letsencrypt
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=32m
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    cpus: 0.25
+    mem_limit: 128m
+    pids_limit: 32
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+    - |
+      set -eu
+      while :; do
+        if certbot certonly --webroot --webroot-path /var/www/certbot \
+          --non-interactive --agree-tos --register-unsafely-without-email \
+          --keep-until-expiring --cert-name "$$API_DOMAIN" -d "$$API_DOMAIN"; then
+          sleep 12h
+        else
+          sleep 900
+        fi
+      done
 networks:
   api_egress:
     internal: true
@@ -190,6 +343,13 @@ networks:
     ipam:
       config:
       - subnet: ${SCANNER_EGRESS_INTERNET_SUBNET:-172.31.254.0/24}
+  api_proxy:
+    internal: true
+volumes:
+  letsencrypt: {}
+  certbot-webroot: {}
+  certbot-lib: {}
+  certbot-log: {}
 configs:
   dns_corefile:
     file: ./dns/Corefile
