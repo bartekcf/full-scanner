@@ -1,0 +1,101 @@
+schema_version: 1
+source: zap
+rules:
+- key: timestamp
+  match:
+    plugin_ids:
+    - '10096'
+    alert_refs:
+    - '10096'
+    names:
+    - Timestamp Disclosure - Unix
+  group: technical_info
+  title: Znaczniki czasu w publicznej odpowiedzi
+  default_priority: info
+  verification_status: context_required
+  placement: technical
+  observation: W publicznej odpowiedzi odnotowano liczby interpretowane przez skaner jako znaczniki czasu Unix.
+  impact: Mogą to być zwykłe daty publikacji lub wersje zasobów. Znaczenie ma wyłącznie konkretne ujawnienie
+    informacji, które nie powinny być publiczne.
+  recommendation: Sprawdzić kontekst tylko wtedy, gdy znaczniki mogą ujawniać niepubliczne zdarzenia lub dane.
+  verification: Zweryfikować semantykę wartości bez publikowania niepotrzebnych danych.
+  limitations: Sama liczba wystąpień nie oznacza liczby podatności.
+  evidence_fields:
+  - url
+  - safe_evidence
+  references:
+  - https://www.zaproxy.org/docs/alerts/10096/
+  observed_in_examples: true
+- key: modern_app
+  match:
+    plugin_ids:
+    - '10109'
+    alert_refs:
+    - '10109'
+    names:
+    - Modern Web Application
+  group: technical_info
+  title: Rozpoznano cechy aplikacji webowej
+  default_priority: info
+  verification_status: metadata
+  placement: technical
+  observation: Skaner rozpoznał cechy współczesnej aplikacji webowej.
+  impact: Informacja pomocnicza przy planowaniu zakresu dalszej analizy.
+  recommendation: Nie wymaga samodzielnego działania.
+  verification: Nie dotyczy.
+  limitations: Nie jest to ustalenie o podatności.
+  evidence_fields:
+  - url
+  references:
+  - https://www.zaproxy.org/docs/alerts/10109/
+  observed_in_examples: true
+- key: session_identified
+  match:
+    plugin_ids:
+    - '10112'
+    alert_refs:
+    - '10112'
+    names:
+    - Session Management Response Identified
+  group: technical_info
+  title: Rozpoznano mechanizm obsługi sesji
+  default_priority: info
+  verification_status: metadata
+  placement: technical
+  observation: Skaner wskazał odpowiedź związaną z mechanizmem sesji.
+  impact: Informacja pomocnicza, nie ocena bezpieczeństwa sesji.
+  recommendation: Nie wymaga samodzielnego działania.
+  verification: Jeśli zakres audytu obejmie sesje, ocenić ich konfigurację po uzyskaniu zgody.
+  limitations: Nie potwierdzono ani poprawności, ani wad mechanizmu.
+  evidence_fields:
+  - url
+  - cookie_name
+  references:
+  - https://www.zaproxy.org/docs/alerts/10112/
+  observed_in_examples: true
+- key: cache_review
+  match:
+    plugin_ids:
+    - '10015'
+    alert_refs:
+    - '10015'
+    names:
+    - Re-examine Cache-control Directives
+  group: cache
+  title: Zalecana weryfikacja zasad buforowania
+  default_priority: info
+  verification_status: context_required
+  placement: technical
+  observation: Skaner wskazał konfigurację nagłówków cache do przeglądu.
+  impact: Buforowanie publicznej treści jest normalne; problem może dotyczyć przechowywania odpowiedzi zawierających
+    dane niepubliczne.
+  recommendation: Dopasować politykę cache do rodzaju odpowiedzi; osobno ocenić dane użytkownika i treści publiczne.
+  verification: Sprawdzić Cache-Control i rzeczywisty charakter odpowiedzi.
+  limitations: Nie ustawiać no-store na wszystkich zasobach bez uzasadnienia.
+  evidence_fields:
+  - url
+  - header_name
+  - safe_header_value
+  references:
+  - https://www.zaproxy.org/docs/alerts/10015/
+  observed_in_examples: true

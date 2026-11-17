@@ -1,0 +1,33 @@
+schema_version: 1
+source: zap
+rules:
+- key: csrf_missing
+  match:
+    plugin_ids:
+    - '10202'
+    alert_refs:
+    - '10202'
+    names:
+    - Absence of Anti-CSRF Tokens
+  group: forms
+  title: Ochrona formularzy przed nieautoryzowanymi żądaniami
+  default_priority: review
+  verification_status: unverified_risk
+  placement: main
+  observation: W analizowanym kodzie formularza nie rozpoznano standardowego tokena CSRF.
+  impact: Jeżeli formularz zmienia stan aplikacji w kontekście użytkownika, brak skutecznej ochrony może umożliwić
+    wymuszenie niezamierzonej operacji.
+  recommendation: Ustalić funkcję formularza i sprawdzić mechanizmy ochrony po stronie serwera, w tym frameworkowy
+    mechanizm CSRF.
+  verification: Administrator powinien zweryfikować obsługę operacji zmieniających stan i skuteczność ochrony
+    w autoryzowanym środowisku.
+  limitations: Brak rozpoznanego tokena w HTML nie dowodzi braku ochrony; formularz może nie wykonywać operacji
+    wymagającej tej ochrony.
+  evidence_fields:
+  - url
+  - form_id
+  - form_method
+  - safe_form_action
+  references:
+  - https://www.zaproxy.org/docs/alerts/10202/
+  observed_in_examples: true

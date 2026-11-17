@@ -1,0 +1,5 @@
+.:53 {
+    bind {$DNS_RELAY_ADDRESS}
+    errors
+    forward . {$DNS_UPSTREAM}
+}

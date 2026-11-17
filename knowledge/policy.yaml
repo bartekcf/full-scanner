@@ -1,0 +1,75 @@
+schema_version: 1
+kind: reporting_policy
+priorities:
+  urgent: {label: 'Pilna weryfikacja', rank: 0}
+  review: {label: 'Zalecana weryfikacja', rank: 1}
+  improve: {label: 'Zalecane usprawnienie', rank: 2}
+  info: {label: 'Informacja techniczna', rank: 3}
+groups:
+  csp: {title: 'Polityka bezpieczeństwa treści (CSP)', order: 10}
+  browser_headers: {title: 'Nagłówki bezpieczeństwa przeglądarki', order: 20}
+  forms: {title: 'Bezpieczeństwo formularzy', order: 30}
+  cookies: {title: 'Konfiguracja plików cookies', order: 40}
+  external_resources: {title: 'Zewnętrzne zasoby strony', order: 50}
+  transport: {title: 'Bezpieczeństwo połączenia', order: 60}
+  server_technology: {title: 'Technologie serwerowe i aktualizacje', order: 70}
+  cache: {title: 'Zasady buforowania', order: 80}
+  technical_info: {title: 'Informacje techniczne', order: 90}
+  unclassified: {title: 'Inne obserwacje do weryfikacji', order: 100}
+matching:
+  # These are contract declarations; the implementation must enforce them.
+  strategy: exact_variant_then_consistent_plugin_and_name
+  normalize_names: [unicode_nfkc, trim, collapse_whitespace, casefold]
+  allow_plugin_only_if_single_unambiguous_rule: false
+  reject_conflicting_identifiers: true
+  unknown_rule: preserve_and_flag
+priority_overrides:
+  - key: high_risk_review
+    when: {scanner_severity_in: [high, critical], verification_status_not: metadata}
+    set_priority: urgent
+    meaning: 'Pilność sprawdzenia, nie potwierdzenie podatności.'
+  - key: contextual_technical_info
+    when: {rule_key_in: [timestamp, external_js, cache_review], reviewer_confirmed_sensitive_context: true}
+    set_priority: review
+    set_placement: main
+  - key: sensitive_cookie
+    when: {rule_key_in: [cookie_httponly, cookie_secure, cookie_samesite_missing, cookie_samesite_none], reviewer_confirmed_sensitive_cookie: true}
+    set_priority: review
+  - key: unknown_high_or_medium
+    when: {unmapped: true, scanner_severity_in: [high, critical, medium]}
+    set_placement: main
+fallback:
+  group: unclassified
+  title: 'Obserwacja wymagająca dodatkowej weryfikacji'
+  priority: review
+  verification_status: unverified_risk
+  observation: 'Automatyczna analiza zgłosiła obserwację opisaną w danych technicznych poniżej.'
+  impact: 'Znaczenie dla serwisu nie zostało jeszcze ustalone.'
+  recommendation: 'Zweryfikować wskazany element konfiguracji lub funkcję aplikacji w uzgodnionym zakresie.'
+  verification: 'Ustalić kontekst i ocenić zasadność obserwacji przed podjęciem decyzji o zmianie.'
+coverage:
+  statuses:
+    completed: 'Wykonano'
+    partial: 'Wykonano częściowo'
+    failed: 'Nie udało się zweryfikować'
+    not_run: 'Nie wykonano'
+    out_of_scope: 'Poza zakresem'
+    unknown: 'Brak danych o wyniku'
+  module_labels:
+    bounded_http_fingerprint: 'Identyfikacja technologii HTTP'
+    tls_certificate_metadata: 'Weryfikacja danych certyfikatu TLS'
+  error_labels:
+    bounded_http_fingerprint_tool_failed: 'Narzędzie identyfikacji technologii nie ukończyło pracy.'
+    tls_metadata_invalid_url: 'Nie udało się ustalić danych certyfikatu na podstawie adresu użytego przez moduł.'
+  fallback_error: 'Kontrola nie została ukończona; brak pełnego wyniku.'
+privacy:
+  raw_cookie_values: deny
+  raw_authorization_headers: deny
+  raw_csrf_tokens: deny
+  raw_session_ids: deny
+  raw_csp_nonces: deny
+  url_query_values: redact
+  url_fragments: remove
+  unknown_raw_evidence: omit_until_sanitized
+  html: escape
+  remote_render_requests: deny

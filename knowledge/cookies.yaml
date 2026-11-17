@@ -1,0 +1,105 @@
+schema_version: 1
+source: zap
+rules:
+- key: cookie_httponly
+  match:
+    plugin_ids:
+    - '10010'
+    alert_refs:
+    - '10010'
+    names:
+    - Cookie No HttpOnly Flag
+  group: cookies
+  title: Brak atrybutu HttpOnly
+  default_priority: improve
+  verification_status: passive_observation
+  placement: main
+  observation: W analizowanej odpowiedzi zgłoszono plik cookie bez atrybutu HttpOnly.
+  impact: Skrypty w przeglądarce mogą odczytywać takie cookie, co ma znaczenie zwłaszcza dla danych sesyjnych.
+  recommendation: Włączyć HttpOnly dla cookies, które nie wymagają odczytu przez JavaScript.
+  verification: Ustalić funkcję cookie i sprawdzić Set-Cookie oraz działanie aplikacji.
+  limitations: Nie każde cookie musi mieć HttpOnly.
+  evidence_fields:
+  - url
+  - cookie_name
+  - cookie_attributes
+  references:
+  - https://www.zaproxy.org/docs/alerts/10010/
+  observed_in_examples: true
+- key: cookie_secure
+  match:
+    plugin_ids:
+    - '10011'
+    alert_refs:
+    - '10011'
+    names:
+    - Cookie Without Secure Flag
+  group: cookies
+  title: Brak atrybutu Secure
+  default_priority: improve
+  verification_status: passive_observation
+  placement: main
+  observation: W analizowanej odpowiedzi zgłoszono plik cookie bez atrybutu Secure.
+  impact: Cookie może nie mieć wymuszonego przesyłania wyłącznie przez bezpieczne połączenie.
+  recommendation: Włączyć Secure dla cookies sesyjnych i wrażliwych po zapewnieniu HTTPS.
+  verification: Sprawdzić Set-Cookie, przekierowania HTTPS i obsługę sesji.
+  limitations: Brak atrybutu nie potwierdza przesłania cookie nieszyfrowanym połączeniem.
+  evidence_fields:
+  - url
+  - cookie_name
+  - cookie_attributes
+  references:
+  - https://www.zaproxy.org/docs/alerts/10011/
+  observed_in_examples: true
+- key: cookie_samesite_missing
+  match:
+    plugin_ids:
+    - '10054'
+    alert_refs:
+    - 10054-1
+    names:
+    - Cookie without SameSite Attribute
+  group: cookies
+  title: Brak jawnego atrybutu SameSite
+  default_priority: improve
+  verification_status: passive_observation
+  placement: main
+  observation: W analizowanej odpowiedzi zgłoszono plik cookie bez jawnego atrybutu SameSite.
+  impact: Zachowanie cookie przy żądaniach między witrynami zależy od domyślnych zasad przeglądarki.
+  recommendation: Dobrać jawną wartość SameSite do funkcji cookie i integracji serwisu.
+  verification: Sprawdzić Set-Cookie i autoryzowane scenariusze korzystające z cookies.
+  limitations: Współczesne przeglądarki często stosują domyślną ochronę; brak jawnej wartości nie potwierdza
+    CSRF.
+  evidence_fields:
+  - url
+  - cookie_name
+  - cookie_attributes
+  references:
+  - https://www.zaproxy.org/docs/alerts/10054-1/
+  observed_in_examples: true
+- key: cookie_samesite_none
+  match:
+    plugin_ids:
+    - '10054'
+    alert_refs:
+    - 10054-2
+    names:
+    - Cookie with SameSite Attribute None
+  group: cookies
+  title: Cookie z SameSite=None
+  default_priority: improve
+  verification_status: passive_observation
+  placement: main
+  observation: W analizowanej odpowiedzi zgłoszono plik cookie z atrybutem SameSite=None.
+  impact: Cookie może być przekazywane w kontekście między witrynami, zależnie od ograniczeń przeglądarki.
+  recommendation: Potwierdzić potrzebę SameSite=None, atrybut Secure i niezależną ochronę operacji zmieniających
+    stan.
+  verification: Sprawdzić funkcję cookie, atrybuty i integracje.
+  limitations: SameSite=None może być prawidłowym wyborem.
+  evidence_fields:
+  - url
+  - cookie_name
+  - cookie_attributes
+  references:
+  - https://www.zaproxy.org/docs/alerts/10054-2/
+  observed_in_examples: false

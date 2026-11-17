@@ -1,0 +1,56 @@
+schema_version: 1
+source: zap
+rules:
+- key: sri_missing
+  match:
+    plugin_ids:
+    - '90003'
+    alert_refs:
+    - '90003'
+    names:
+    - Sub Resource Integrity Attribute Missing
+  group: external_resources
+  title: Brak kontroli integralności zewnętrznych zasobów (SRI)
+  default_priority: review
+  verification_status: passive_observation
+  placement: main
+  observation: W analizowanym HTML zgłoszono zewnętrzny skrypt lub arkusz stylów bez atrybutu integrity.
+  impact: W przypadku nieoczekiwanej zmiany zasobu przez jego dostawcę przeglądarka nie ma tej dodatkowej kontroli
+    zgodności treści z oczekiwanym hashem.
+  recommendation: Zweryfikować dostawców i możliwość korzystania ze stałych wersji zasobów, SRI lub hostowania
+    lokalnego.
+  verification: Sprawdzić wskazane elementy, stabilność zasobów oraz wymogi CORS przy SRI; przetestować aktualizacje.
+  limitations: Nie wszystkie zasoby dynamiczne nadają się do SRI; nie potwierdzono naruszenia integralności.
+  evidence_fields:
+  - url
+  - safe_resource_url
+  - resource_type
+  - safe_evidence
+  references:
+  - https://www.zaproxy.org/docs/alerts/90003/
+  observed_in_examples: true
+- key: external_js
+  match:
+    plugin_ids:
+    - '10017'
+    alert_refs:
+    - '10017'
+    names:
+    - Cross-Domain JavaScript Source File Inclusion
+  group: external_resources
+  title: Skrypty pobierane z zewnętrznych domen
+  default_priority: info
+  verification_status: context_required
+  placement: technical
+  observation: W analizowanym HTML wskazano skrypt pobierany spoza domeny serwisu.
+  impact: Zewnętrzny skrypt jest zależnością od dostawcy i może wykonywać się w kontekście strony.
+  recommendation: Sprawdzić, czy źródło jest zamierzone, potrzebne i należy do zaufanego dostawcy.
+  verification: Porównać listę domen z wykazem zaakceptowanych integracji; połączyć z ustaleniami SRI/CSP dla
+    tego samego zasobu.
+  limitations: Samo użycie zewnętrznego skryptu jest typową praktyką i nie stanowi podatności.
+  evidence_fields:
+  - url
+  - safe_resource_url
+  references:
+  - https://www.zaproxy.org/docs/alerts/10017/
+  observed_in_examples: true

@@ -1,0 +1,113 @@
+schema_version: 1
+source: zap
+rules:
+- key: php_known
+  match:
+    plugin_ids:
+    - '20020'
+    alert_refs:
+    - 20020-1
+    names:
+    - PHP Version with Known Vulnerabilities
+  group: server_technology
+  title: Wersja PHP potencjalnie objęta znanymi podatnościami
+  default_priority: review
+  verification_status: unverified_risk
+  placement: main
+  observation: Informacja z odpowiedzi HTTP wskazuje na wersję PHP powiązaną przez skaner ze znanymi podatnościami.
+  impact: Jeżeli wykryta wersja jest rzeczywiście używana i nie zawiera odpowiednich poprawek, niektóre podatności
+    mogą dotyczyć serwisu.
+  recommendation: Potwierdzić faktyczną wersję i poprawki dostawcy; ustalić plan aktualizacji do wspieranego
+    środowiska.
+  verification: Porównać wersję pakietu z oficjalnymi informacjami o poprawkach i warunkami CVE, a następnie
+    sprawdzić zgodność aplikacji.
+  limitations: Nagłówek może być nieaktualny; liczba dopasowań CVE nie jest liczbą potwierdzonych podatności.
+  evidence_fields:
+  - url
+  - technology
+  - detected_version
+  - header_name
+  - safe_header_value
+  - cve_candidates
+  references:
+  - https://www.zaproxy.org/docs/alerts/20020-1/
+  observed_in_examples: true
+- key: php_possible
+  match:
+    plugin_ids:
+    - '20020'
+    alert_refs:
+    - 20020-2
+    names:
+    - PHP Version with Possible Known Vulnerabilities
+  group: server_technology
+  title: Niepełna identyfikacja wersji PHP i możliwe podatności
+  default_priority: review
+  verification_status: unverified_risk
+  placement: main
+  observation: Skaner zgłosił niepełne oznaczenie wersji PHP i potencjalne dopasowanie do znanych podatności.
+  impact: Bez pełnej wersji i informacji o poprawkach nie można określić, które podatności mają zastosowanie.
+  recommendation: Potwierdzić pełną wersję, źródło pakietu oraz stan aktualizacji.
+  verification: Administrator powinien porównać rzeczywistą wersję i poprawki z komunikatami producenta.
+  limitations: Nie traktować wersji głównej lub pobocznej jako dokładnej wersji pakietu.
+  evidence_fields:
+  - url
+  - technology
+  - detected_version
+  - header_name
+  - cve_candidates
+  references:
+  - https://www.zaproxy.org/docs/alerts/20020-2/
+  observed_in_examples: false
+- key: server_version
+  match:
+    plugin_ids:
+    - '10036'
+    alert_refs:
+    - 10036-2
+    names:
+    - Server Leaks Version Information via "Server" HTTP Response Header Field
+  group: server_technology
+  title: Ujawnianie wersji serwera HTTP
+  default_priority: improve
+  verification_status: passive_observation
+  placement: main
+  observation: Odpowiedź HTTP zawiera informację o oprogramowaniu w nagłówku Server.
+  impact: Publiczne szczegóły technologiczne mogą ułatwiać rozpoznanie środowiska.
+  recommendation: Ograniczyć zbędne informacje w nagłówkach i niezależnie sprawdzić aktualizacje.
+  verification: Sprawdzić nagłówek po zmianie oraz rzeczywistą wersję pakietu.
+  limitations: Ukrycie nagłówka nie usuwa podatności ani nie zastępuje aktualizacji.
+  evidence_fields:
+  - url
+  - header_name
+  - safe_header_value
+  - detected_version
+  references:
+  - https://www.zaproxy.org/docs/alerts/10036-2/
+  observed_in_examples: true
+- key: powered_by
+  match:
+    plugin_ids:
+    - '10037'
+    alert_refs:
+    - '10037'
+    names:
+    - Server Leaks Information via "X-Powered-By" HTTP Response Header Field(s)
+  group: server_technology
+  title: Ujawnianie technologii aplikacji
+  default_priority: improve
+  verification_status: passive_observation
+  placement: main
+  observation: Odpowiedź HTTP zawiera informację o oprogramowaniu w nagłówku X-Powered-By.
+  impact: Publiczne szczegóły technologiczne mogą ułatwiać rozpoznanie środowiska.
+  recommendation: Ograniczyć zbędne informacje w nagłówkach i niezależnie sprawdzić aktualizacje.
+  verification: Sprawdzić nagłówek po zmianie oraz rzeczywistą wersję pakietu.
+  limitations: Ukrycie nagłówka nie usuwa podatności ani nie zastępuje aktualizacji.
+  evidence_fields:
+  - url
+  - header_name
+  - safe_header_value
+  - detected_version
+  references:
+  - https://www.zaproxy.org/docs/alerts/10037/
+  observed_in_examples: true

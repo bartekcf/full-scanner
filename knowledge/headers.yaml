@@ -1,0 +1,82 @@
+schema_version: 1
+source: zap
+rules:
+- key: frame_missing
+  match:
+    plugin_ids:
+    - '10020'
+    alert_refs:
+    - 10020-1
+    names:
+    - Missing Anti-clickjacking Header
+  group: browser_headers
+  title: Brak rozpoznanej ochrony przed clickjackingiem
+  default_priority: review
+  verification_status: passive_observation
+  placement: main
+  observation: W analizowanej odpowiedzi nie wykryto skutecznej deklaracji ograniczającej osadzanie strony
+    w ramkach.
+  impact: Obca witryna może próbować osadzić stronę i nakłonić użytkownika do niezamierzonego kliknięcia. Znaczenie
+    zależy od dostępnych funkcji.
+  recommendation: Ustalić dopuszczalne miejsca osadzania; skonfigurować CSP frame-ancestors, a w razie potrzeby
+    zgodny X-Frame-Options.
+  verification: Sprawdzić odpowiedzi HTML oraz zgodność z uzgodnionymi integracjami.
+  limitations: Nie potwierdzono skutecznego ataku.
+  evidence_fields:
+  - url
+  - header_presence
+  - safe_header_value
+  references:
+  - https://www.zaproxy.org/docs/alerts/10020-1/
+  observed_in_examples: true
+- key: nosniff_missing
+  match:
+    plugin_ids:
+    - '10021'
+    alert_refs:
+    - '10021'
+    names:
+    - X-Content-Type-Options Header Missing
+  group: browser_headers
+  title: Brak nagłówka X-Content-Type-Options
+  default_priority: improve
+  verification_status: passive_observation
+  placement: main
+  observation: Skaner nie wykrył oczekiwanej wartości nosniff w nagłówku X-Content-Type-Options.
+  impact: Przeglądarka może mieć mniej ograniczeń w interpretacji typu niektórych zasobów.
+  recommendation: 'Ustawić poprawne typy Content-Type oraz X-Content-Type-Options: nosniff.'
+  verification: Sprawdzić nagłówki i działanie skryptów oraz arkuszy stylów.
+  limitations: Samo ustalenie nie potwierdza wykonania niepożądanego kodu.
+  evidence_fields:
+  - url
+  - header_name
+  - safe_header_value
+  references:
+  - https://www.zaproxy.org/docs/alerts/10021/
+  observed_in_examples: true
+- key: hsts_missing
+  match:
+    plugin_ids:
+    - '10035'
+    alert_refs:
+    - 10035-1
+    names:
+    - Strict-Transport-Security Header Not Set
+  group: transport
+  title: Brak deklaracji HSTS
+  default_priority: improve
+  verification_status: passive_observation
+  placement: main
+  observation: W analizowanej odpowiedzi HTTPS nie stwierdzono nagłówka Strict-Transport-Security.
+  impact: Przeglądarka nie otrzymuje tej deklaracji wymuszającej HTTPS podczas kolejnych połączeń.
+  recommendation: Po sprawdzeniu obsługi HTTPS wdrożyć HSTS z odpowiednim max-age; osobno ocenić includeSubDomains
+    i preload.
+  verification: Sprawdzić przekierowania, obsługę HTTPS i nagłówek na odpowiedziach HTTPS.
+  limitations: Brak HSTS nie oznacza braku szyfrowania bieżącego połączenia.
+  evidence_fields:
+  - url
+  - scheme
+  - header_presence
+  references:
+  - https://www.zaproxy.org/docs/alerts/10035-1/
+  observed_in_examples: true

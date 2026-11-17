@@ -1,0 +1,196 @@
+services:
+  dns:
+    image: coredns/coredns:1.13.1@sha256:9b9128672209474da07c91439bf15ed704ae05ad918dd6454e5b6ae14e35fee6
+    command:
+    - -conf
+    - /Corefile
+    environment:
+      DNS_RELAY_ADDRESS: ${SCANNER_DNS_PREFIX:-172.31.253}.2
+      DNS_UPSTREAM: ${SCANNER_DNS_UPSTREAM:-127.0.0.11}
+    configs:
+    - source: dns_corefile
+      target: /Corefile
+    networks:
+      dns_internal:
+        ipv4_address: ${SCANNER_DNS_PREFIX:-172.31.253}.2
+      internet: {}
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+    - ALL
+    cap_add:
+    - NET_BIND_SERVICE
+    security_opt:
+    - no-new-privileges:true
+    cpus: 0.25
+    mem_limit: 64m
+    pids_limit: 32
+  egress:
+    build:
+      context: .
+      dockerfile: egress/Dockerfile
+    environment:
+      EGRESS_API_CLIENT_CIDR: ${SCANNER_EGRESS_API_PREFIX:-172.31.250}.2/32
+      EGRESS_ZAP_CLIENT_CIDR: ${SCANNER_EGRESS_ZAP_PREFIX:-172.31.251}.2/32
+      EGRESS_DNS_SERVER: ${SCANNER_DNS_PREFIX:-172.31.253}.2
+    networks:
+      api_egress:
+        ipv4_address: ${SCANNER_EGRESS_API_PREFIX:-172.31.250}.3
+      zap_egress:
+        ipv4_address: ${SCANNER_EGRESS_ZAP_PREFIX:-172.31.251}.3
+        aliases:
+        - egress-zap
+      internet: {}
+      dns_internal:
+        ipv4_address: ${SCANNER_DNS_PREFIX:-172.31.253}.3
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=32m
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    cpus: 0.5
+    mem_limit: 384m
+    pids_limit: 100
+  zap:
+    image: ghcr.io/zaproxy/zaproxy@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af
+    command:
+    - zap.sh
+    - -daemon
+    - -silent
+    - -host
+    - ${SCANNER_API_PREFIX:-172.31.252}.3
+    - -port
+    - '8080'
+    - -config
+    - api.key=${ZAP_API_KEY:?Set ZAP_API_KEY in .env}
+    - -config
+    - api.disablekey=false
+    - -config
+    - api.addrs.addr.name=^(${SCANNER_API_PREFIX:-172.31.252}\.2|${SCANNER_API_PREFIX:-172.31.252}\.3|127\.0\.0\.1)$
+    - -config
+    - api.addrs.addr.regex=true
+    environment:
+      ZAP_PORT: '8080'
+      ZAP_API_KEY: ${ZAP_API_KEY:?Set ZAP_API_KEY in .env}
+    dns:
+    - ${SCANNER_DNS_PREFIX:-172.31.253}.2
+    depends_on:
+      egress:
+        condition: service_healthy
+    networks:
+      zap_api:
+        ipv4_address: ${SCANNER_API_PREFIX:-172.31.252}.3
+      zap_egress:
+        ipv4_address: ${SCANNER_EGRESS_ZAP_PREFIX:-172.31.251}.2
+      dns_internal:
+        ipv4_address: ${SCANNER_DNS_PREFIX:-172.31.253}.4
+    restart: unless-stopped
+    init: true
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    cpus: 2.0
+    mem_limit: 2g
+    pids_limit: 256
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - 'curl --noproxy ''*'' --fail --silent -H "X-ZAP-API-Key: $${ZAP_API_KEY}"
+        http://${SCANNER_API_PREFIX:-172.31.252}.3:8080/JSON/core/view/version/ >/dev/null'
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+  scanner:
+    build:
+      context: .
+    depends_on:
+      zap:
+        condition: service_healthy
+      dns:
+        condition: service_started
+      egress:
+        condition: service_healthy
+    networks:
+      api_egress:
+        ipv4_address: ${SCANNER_EGRESS_API_PREFIX:-172.31.250}.2
+      zap_api:
+        ipv4_address: ${SCANNER_API_PREFIX:-172.31.252}.2
+      dns_internal:
+        ipv4_address: ${SCANNER_DNS_PREFIX:-172.31.253}.5
+    dns:
+    - ${SCANNER_DNS_PREFIX:-172.31.253}.2
+    environment:
+      ZAP_API_URL: http://${SCANNER_API_PREFIX:-172.31.252}.3:8080
+      ZAP_PROXY_URL: http://${SCANNER_API_PREFIX:-172.31.252}.3:8080
+      ZAP_API_KEY: ${ZAP_API_KEY:?Set ZAP_API_KEY in .env}
+      ZAP_EGRESS_ISOLATION: proxy_only
+      EGRESS_PROXY_URL: http://${SCANNER_EGRESS_API_PREFIX:-172.31.250}.3:3128
+      TARGET_TIMEOUT_SECONDS: ${TARGET_TIMEOUT_SECONDS:-30}
+      PASSIVE_SCAN_TIMEOUT_SECONDS: ${PASSIVE_SCAN_TIMEOUT_SECONDS:-45}
+      DNS_TIMEOUT_SECONDS: ${DNS_TIMEOUT_SECONDS:-5}
+      MAX_RESPONSE_BYTES: ${MAX_RESPONSE_BYTES:-2000000}
+      CVE_CACHE_PATH: /output/.cve-cache.sqlite3
+      NVD_API_KEY: ${NVD_API_KEY:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      ENABLE_PROJECTDISCOVERY_HTTPX: ${ENABLE_PROJECTDISCOVERY_HTTPX:-true}
+      ENABLE_BOUNDED_HTTP_FINGERPRINT: ${ENABLE_BOUNDED_HTTP_FINGERPRINT:-true}
+      FINGERPRINT_TOOL_TIMEOUT_SECONDS: ${FINGERPRINT_TOOL_TIMEOUT_SECONDS:-15}
+    init: true
+    read_only: true
+    tmpfs:
+    - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 100
+    volumes:
+    - ./output:/output
+    - ./input:/input:ro
+    entrypoint:
+    - python
+    - -m
+    - app.cli
+    command:
+    - --help
+    profiles:
+    - cli
+    user: ${LOCAL_UID:-1000}:${LOCAL_GID:-1000}
+networks:
+  api_egress:
+    internal: true
+    ipam:
+      config:
+      - subnet: ${SCANNER_EGRESS_API_PREFIX:-172.31.250}.0/29
+  zap_egress:
+    internal: true
+    ipam:
+      config:
+      - subnet: ${SCANNER_EGRESS_ZAP_PREFIX:-172.31.251}.0/29
+  zap_api:
+    internal: true
+    ipam:
+      config:
+      - subnet: ${SCANNER_API_PREFIX:-172.31.252}.0/29
+  dns_internal:
+    internal: true
+    ipam:
+      config:
+      - subnet: ${SCANNER_DNS_PREFIX:-172.31.253}.0/29
+  internet:
+    driver: bridge
+    ipam:
+      config:
+      - subnet: ${SCANNER_EGRESS_INTERNET_SUBNET:-172.31.254.0/24}
+configs:
+  dns_corefile:
+    file: ./dns/Corefile
+name: local-scanner

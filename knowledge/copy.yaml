@@ -1,0 +1,60 @@
+schema_version: 1
+kind: report_copy
+language: pl-PL
+brand:
+  name: AudytorAI
+  email: null
+  website: null
+  legal_name: null
+  # Do not invent missing data. Populate from the repository/configuration.
+report:
+  title: 'Wstępna analiza bezpieczeństwa strony internetowej'
+  labels:
+    target: 'Badany adres'
+    final_url: 'Adres końcowy'
+    date: 'Data analizy'
+    scope: 'Zakres analizy'
+    method: 'Metoda'
+    report_id: 'Numer raportu'
+  method: 'Automatyczna analiza pasywna'
+  intro: 'W dniu {date} przeprowadziliśmy wstępną analizę publicznie dostępnej strony internetowej {target}. Sprawdziliśmy wybrane elementy jej konfiguracji na podstawie danych dostępnych bez logowania.'
+  summary_headings:
+    - 'Podsumowanie analizy'
+    - 'Najważniejsze ustalenia'
+    - 'Zalecane działania'
+  summaries:
+    urgent: 'Wyniki wskazują na elementy wymagające pilnej weryfikacji technicznej. W pierwszej kolejności zalecamy sprawdzenie: {priority_items}.'
+    review: 'W trakcie analizy zaobserwowaliśmy elementy konfiguracji wymagające weryfikacji. Najważniejsze ustalenia dotyczą następujących obszarów: {areas}.'
+    improve: 'W analizowanym zakresie zidentyfikowaliśmy możliwości uzupełnienia zabezpieczeń. Zalecane usprawnienia dotyczą następujących obszarów: {areas}.'
+    info_only: 'W wykonanych kontrolach nie odnotowano ustaleń wymagających rekomendowanych zmian. Zebrano informacje techniczne opisane w dalszej części dokumentu.'
+    no_findings: 'W wykonanych kontrolach nie odnotowano obserwacji wymagających działania. Wynik dotyczy wyłącznie zakresu opisanego w raporcie.'
+    no_usable_data: 'Nie udało się zebrać danych wystarczających do sformułowania wniosków. Analizę należy powtórzyć przed oceną konfiguracji serwisu.'
+  coverage_notice: 'Zakres analizy jest niepełny. Nie udało się ukończyć następujących kontroli: {checks}.'
+  review_notice: 'Wnioski pochodzą z analizy automatycznej. Obserwacje wymagające sprawdzenia nie są równoznaczne z potwierdzonymi podatnościami.'
+  actions:
+    urgent: 'Zalecamy niezwłoczne przekazanie ustaleń oznaczonych jako pilne osobie odpowiedzialnej za utrzymanie serwisu.'
+    review: 'Zalecamy przekazanie raportu administratorowi lub wykonawcy serwisu w celu weryfikacji ustaleń i uzgodnienia ewentualnych zmian.'
+    improve: 'Zalecamy uwzględnienie wskazanych usprawnień podczas najbliższego przeglądu konfiguracji.'
+    info_only: 'Zalecamy kontynuowanie regularnych aktualizacji i okresowych przeglądów zabezpieczeń.'
+    no_findings: 'Zalecamy kontynuowanie regularnych aktualizacji i okresowych przeglądów zabezpieczeń.'
+    no_usable_data: 'Zalecamy uzupełnienie kontroli przed wyciąganiem wniosków.'
+  finding_labels:
+    observation: 'Ustalenie'
+    impact: 'Znaczenie'
+    recommendation: 'Zalecenie'
+    verification: 'Weryfikacja po stronie administratora'
+    evidence: 'Podstawa ustalenia'
+    confidence: 'Pewność detekcji'
+    scanner_severity: 'Poziom wg skanera'
+    location: 'Miejsce wystąpienia'
+  sections:
+    details: 'Szczegółowe ustalenia'
+    remaining: 'Pozostałe obserwacje techniczne'
+    coverage: 'Zakres i wyniki kontroli'
+    limits: 'Ograniczenia analizy'
+    contact: 'Informacje o wykonawcy'
+  limitations: 'Analiza obejmowała wyłącznie publicznie dostępne zasoby i kontrole wskazane w tabeli zakresu. Nie obejmowała logowania do aplikacji, testów uprawnień, przeglądu kodu źródłowego ani prób wykorzystania podatności. Raport nie stanowi pełnego audytu bezpieczeństwa, certyfikacji ani potwierdzenia zgodności z przepisami.'
+  cve_note: 'Dopasowania do bazy znanych podatności (CVE) wymagają potwierdzenia wersji oprogramowania, zastosowanych poprawek i warunków występowania podatności.'
+  contact_text: 'Analiza została przygotowana przez {brand}. W przypadku pytań dotyczących ustaleń przedstawionych w raporcie można skontaktować się z wykonawcą analizy.'
+  optional_extension_text: 'Zakres przeprowadzonej analizy nie obejmuje pełnego badania aplikacji. Szczegółowa weryfikacja ustaleń, mechanizmów uwierzytelniania, kontroli dostępu i konfiguracji może zostać wykonana w ramach odrębnie uzgodnionego audytu, za zgodą właściciela lub uprawnionego administratora serwisu.'
+  optional_extension_default: false

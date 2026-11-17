@@ -1,0 +1,44 @@
+# IANA IPv4 Special-Purpose Address Registry and non-global ranges
+# Registry revision: 2025-10-09 (IANA IPv4/IPv6 special registries)
+# Keep this list in sync with the Python URL validator and Squid's dst ACL.
+# IPv4 non-global and all IANA special-purpose ranges
+0.0.0.0/8
+10.0.0.0/8
+100.64.0.0/10
+127.0.0.0/8
+169.254.0.0/16
+172.16.0.0/12
+192.0.0.0/24
+192.0.2.0/24
+192.31.196.0/24
+192.52.193.0/24
+192.88.99.0/24
+192.168.0.0/16
+192.175.48.0/24
+198.18.0.0/15
+198.51.100.0/24
+203.0.113.0/24
+224.0.0.0/4
+240.0.0.0/4
+255.255.255.255/32
+# IPv6 outside the global-unicast allocation 2000::/3
+::/3
+4000::/2
+8000::/1
+# IPv6-mapped and translation/transition mechanisms
+::/128
+::1/128
+::ffff:0:0/96
+64:ff9b::/96
+64:ff9b:1::/48
+100::/64
+100:0:0:1::/64
+2001::/23
+2001:db8::/32
+2002::/16
+2620:4f:8000::/48
+3fff::/20
+5f00::/16
+fc00::/7
+fe80::/10
+ff00::/8

@@ -1,0 +1,214 @@
+schema_version: 1
+source: zap
+rules:
+- key: csp_missing
+  match:
+    plugin_ids:
+    - '10038'
+    alert_refs:
+    - 10038-1
+    names:
+    - Content Security Policy (CSP) Header Not Set
+  group: csp
+  title: Brak nagłówka polityki bezpieczeństwa treści (CSP)
+  default_priority: review
+  verification_status: passive_observation
+  placement: main
+  observation: W analizowanej odpowiedzi HTTP nie stwierdzono nagłówka Content-Security-Policy.
+  impact: Brakuje dodatkowej warstwy ograniczającej działanie niepożądanych skryptów i zasobów w przeglądarce.
+    Może to zwiększyć skutki innych podatności aplikacji.
+  recommendation: Przygotować politykę CSP odpowiednią do rzeczywiście wykorzystywanych zasobów i wdrożyć ją
+    etapowo.
+  verification: Sprawdzić nagłówki odpowiedzi HTML, przetestować politykę w trybie Report-Only, następnie egzekwowanie
+    i działanie serwisu.
+  limitations: Sam brak nagłówka nie jest dowodem XSS; należy sprawdzić również ewentualną politykę w HTML.
+  evidence_fields:
+  - url
+  - header_name
+  - header_presence
+  references:
+  - https://www.zaproxy.org/docs/alerts/10038-1/
+  observed_in_examples: true
+- key: csp_obsolete
+  match:
+    plugin_ids:
+    - '10038'
+    alert_refs:
+    - 10038-2
+    names:
+    - Obsolete Content Security Policy (CSP) Header Found
+  group: csp
+  title: Przestarzały nagłówek CSP
+  default_priority: review
+  verification_status: passive_observation
+  placement: main
+  observation: Zaobserwowano przestarzały wariant nagłówka CSP.
+  impact: Starszy format może nie zapewniać oczekiwanego działania w aktualnych przeglądarkach.
+  recommendation: Zastąpić starszy nagłówek współczesną polityką Content-Security-Policy.
+  verification: Sprawdzić efektywną politykę i działanie strony w obsługiwanych przeglądarkach.
+  limitations: Nie oznacza automatycznie braku wszystkich zabezpieczeń.
+  evidence_fields:
+  - url
+  - header_name
+  - safe_header_value
+  references:
+  - https://www.zaproxy.org/docs/alerts/10038-2/
+  observed_in_examples: false
+- key: csp_report_only
+  match:
+    plugin_ids:
+    - '10038'
+    alert_refs:
+    - 10038-3
+    names:
+    - Content Security Policy (CSP) Report-Only Header Found
+  group: csp
+  title: Polityka CSP w trybie raportowania
+  default_priority: review
+  verification_status: passive_observation
+  placement: main
+  observation: Zgłoszono politykę CSP działającą w trybie raportowania.
+  impact: Tryb Report-Only służy do obserwowania naruszeń i sam nie blokuje zasobów.
+  recommendation: Ocenić gotowość polityki do egzekwowania po weryfikacji raportów i testach funkcjonalnych.
+  verification: Sprawdzić, czy obok Report-Only istnieje odrębna egzekwowana polityka.
+  limitations: Tryb raportowania może być celowym etapem wdrożenia.
+  evidence_fields:
+  - url
+  - header_name
+  - safe_header_value
+  references:
+  - https://www.zaproxy.org/docs/alerts/10038-3/
+  observed_in_examples: false
+- key: csp_wildcard
+  match:
+    plugin_ids:
+    - '10055'
+    alert_refs:
+    - 10055-4
+    names:
+    - 'CSP: Wildcard Directive'
+  group: csp
+  title: Zbyt szerokie źródła w CSP
+  default_priority: review
+  verification_status: passive_observation
+  placement: main
+  observation: W polityce CSP zgłoszono dyrektywę dopuszczającą szeroki zakres źródeł.
+  impact: Zakres ochrony może być mniejszy niż oczekiwano; znaczenie zależy od dyrektywy i efektywnej polityki.
+  recommendation: Ograniczyć dozwolone źródła do tych, których serwis potrzebuje.
+  verification: Sprawdzić konkretną dyrektywę oraz wszystkie obowiązujące polityki; przetestować zasoby.
+  limitations: Nie każda gwiazdka ma jednakowy wpływ; img-src i script-src należy oceniać odrębnie.
+  evidence_fields:
+  - url
+  - directive
+  - safe_header_value
+  - safe_evidence
+  references:
+  - https://www.zaproxy.org/docs/alerts/10055-4/
+  observed_in_examples: true
+- key: csp_script_inline
+  match:
+    plugin_ids:
+    - '10055'
+    alert_refs:
+    - 10055-5
+    names:
+    - 'CSP: script-src unsafe-inline'
+  group: csp
+  title: Dopuszczenie skryptów osadzonych w HTML
+  default_priority: review
+  verification_status: passive_observation
+  placement: main
+  observation: W polityce CSP zgłoszono użycie unsafe-inline w script-src.
+  impact: Jeżeli dyrektywa jest skuteczna, może osłabiać ochronę przed wstrzykniętym kodem JavaScript.
+  recommendation: Ograniczyć skrypty inline, rozważyć nonce lub hashe oraz uporządkować zależności.
+  verification: Sprawdzić efektywną politykę, w tym nonce, hashe, strict-dynamic i zachowanie przeglądarek.
+  limitations: Obecność unsafe-inline nie przesądza o jego skuteczności ani o podatności XSS.
+  evidence_fields:
+  - url
+  - directive
+  - safe_header_value
+  - safe_evidence
+  references:
+  - https://www.zaproxy.org/docs/alerts/10055-5/
+  observed_in_examples: true
+- key: csp_style_inline
+  match:
+    plugin_ids:
+    - '10055'
+    alert_refs:
+    - 10055-6
+    names:
+    - 'CSP: style-src unsafe-inline'
+  group: csp
+  title: Dopuszczenie stylów osadzonych w HTML
+  default_priority: improve
+  verification_status: passive_observation
+  placement: main
+  observation: W polityce CSP zgłoszono użycie unsafe-inline w style-src.
+  impact: Może ograniczać ochronę przed wstrzykiwaniem stylów i modyfikacją wyglądu strony.
+  recommendation: Sprawdzić możliwość przeniesienia stylów do plików lub zastosowania odpowiedniej polityki
+    nonce/hash.
+  verification: Ocenić style generowane dynamicznie i przetestować wygląd serwisu.
+  limitations: Nie jest to równoznaczne z wykonywaniem dowolnego JavaScript.
+  evidence_fields:
+  - url
+  - directive
+  - safe_header_value
+  - safe_evidence
+  references:
+  - https://www.zaproxy.org/docs/alerts/10055-6/
+  observed_in_examples: true
+- key: csp_no_fallback
+  match:
+    plugin_ids:
+    - '10055'
+    alert_refs:
+    - 10055-13
+    names:
+    - 'CSP: Failure to Define Directive with No Fallback'
+  group: csp
+  title: Brak wymaganej dyrektywy CSP
+  default_priority: review
+  verification_status: passive_observation
+  placement: main
+  observation: Skaner wskazał brak dyrektywy CSP, dla której nie działa mechanizm dziedziczenia wartości.
+  impact: Dany obszar zachowania przeglądarki może pozostać nieograniczony mimo ustawienia innych dyrektyw.
+  recommendation: Ustalić brakującą dyrektywę i zdefiniować ograniczenia adekwatne do funkcji strony.
+  verification: Sprawdzić nazwę brakującej dyrektywy w szczegółach alertu oraz efektywną politykę.
+  limitations: Nie przypisywać konkretnej brakującej dyrektywy bez dowodu; nie każda funkcja wymaga tych samych
+    ograniczeń.
+  evidence_fields:
+  - url
+  - directive
+  - safe_header_value
+  - safe_evidence
+  references:
+  - https://www.zaproxy.org/docs/alerts/10055-13/
+  observed_in_examples: true
+- key: csp_eval
+  match:
+    plugin_ids:
+    - '10055'
+    alert_refs:
+    - 10055-10
+    names:
+    - 'CSP: script-src unsafe-eval'
+  group: csp
+  title: Dopuszczenie dynamicznej ewaluacji kodu
+  default_priority: review
+  verification_status: passive_observation
+  placement: main
+  observation: W polityce CSP zgłoszono unsafe-eval w script-src.
+  impact: Może osłabiać ograniczenia wykonywania kodu tworzonego dynamicznie z tekstu.
+  recommendation: Zweryfikować zależności wykorzystujące dynamiczną ewaluację i ograniczyć ją, jeśli nie jest
+    konieczna.
+  verification: Sprawdzić efektywną politykę i działanie aplikacji po zmianie.
+  limitations: Nie potwierdzono wstrzyknięcia kodu.
+  evidence_fields:
+  - url
+  - directive
+  - safe_header_value
+  - safe_evidence
+  references:
+  - https://www.zaproxy.org/docs/alerts/10055-10/
+  observed_in_examples: false
