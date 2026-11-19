@@ -1,9 +1,9 @@
 import {spawn} from 'node:child_process'
 import {fileURLToPath} from 'node:url'
 const root=fileURLToPath(new URL('.',import.meta.url))
-export function child(command,args,input,maxOutput=24*1024*1024){
+export function child(command,args,input,maxOutput=24*1024*1024,cwd=root){
  return new Promise((resolve,reject)=>{
-  const p=spawn(command,args,{cwd:root,stdio:['pipe','pipe','pipe'],windowsHide:true})
+  const p=spawn(command,args,{cwd,stdio:['pipe','pipe','pipe'],windowsHide:true})
   const chunks=[];let size=0,err='',settled=false
   const finish=(error,value)=>{if(settled)return;settled=true;clearTimeout(timer);error?reject(error):resolve(value)}
   const timer=setTimeout(()=>{p.kill('SIGKILL');finish(new Error('Przekroczono limit czasu przetwarzania (90 s).'))},90000)
@@ -18,3 +18,9 @@ export function child(command,args,input,maxOutput=24*1024*1024){
 export async function validateCatalog(){return JSON.parse((await child(process.env.REPORT_PYTHON||'python3',['prepare.py','--validate'],'')).toString())}
 export async function prepareModel(scan){return JSON.parse((await child(process.env.REPORT_PYTHON||'python3',['prepare.py'],JSON.stringify(scan))).toString())}
 export async function renderPrepared(model){return child(process.execPath,['--max-old-space-size=384','render-worker.mjs'],JSON.stringify(model),32*1024*1024)}
+
+export async function registerReport(output, scanId, pdf) {
+ const project = fileURLToPath(new URL('..', import.meta.url))
+ await child(process.env.REPORT_PYTHON || 'python3',
+   ['-m', 'app.results', '--output', output, '--register-report', scanId, pdf], '', undefined, project)
+}

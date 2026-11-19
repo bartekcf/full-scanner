@@ -1,13 +1,16 @@
 """List and filter saved scan results without making network requests."""
 import argparse
 import json
-from app.storage import connect, import_results
+from app.storage import connect, import_results, publish_index, register_report
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", default="/output")
-    parser.add_argument("--import-json", action="store_true")
+    action = parser.add_mutually_exclusive_group()
+    action.add_argument("--import-json", action="store_true")
+    action.add_argument("--refresh-index", action="store_true", help="Publish the PyCharm database")
+    action.add_argument("--register-report", nargs=2, metavar=("SCAN_ID", "PDF"))
     parser.add_argument("--url", help="URL substring")
     parser.add_argument("--status", choices=["running", "completed", "failed"])
     parser.add_argument("--severity", choices=["high", "medium", "low", "info", "unknown"])
@@ -26,6 +29,12 @@ def main():
     try:
         if args.import_json:
             import_results(db, args.output)
+        if args.register_report:
+            register_report(db, args.output, *args.register_report)
+        if args.import_json or args.register_report or args.refresh_index:
+            publish_index(db, args.output)
+        if args.register_report or args.refresh_index:
+            return
         clauses, values = [], []
         if not args.history:
             clauses.append("s.rowid = (SELECT x.rowid FROM scans x WHERE x.url=s.url ORDER BY x.created_at DESC, x.rowid DESC LIMIT 1)")
@@ -69,7 +78,12 @@ def main():
             for result in results:
                 scan_id = result["scan_id"]
                 result["alerts"] = [dict(r) for r in db.execute(
-                    "SELECT rule_id,severity,title FROM alerts WHERE scan_id=?", (scan_id,))]
+                    "SELECT rule_id,severity,title,page_url FROM alerts WHERE scan_id=?", (scan_id,))]
+                result["page_warnings"] = [dict(r) for r in db.execute(
+                    """SELECT page_url,rule_id,severity,title,COUNT(*) AS count
+                       FROM alerts WHERE scan_id=?
+                       GROUP BY page_url,rule_id,severity,title
+                       ORDER BY page_url,title,severity,rule_id""", (scan_id,))]
                 result["errors"] = [r[0] for r in db.execute(
                     "SELECT code FROM errors WHERE scan_id=?", (scan_id,))]
                 result["http_checks"] = [dict(r) for r in db.execute(

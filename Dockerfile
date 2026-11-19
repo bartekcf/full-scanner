@@ -36,6 +36,15 @@ WORKDIR /reports
 COPY reports/package.json reports/package-lock.json ./
 RUN npm ci --omit=dev
 
+FROM python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 AS report-sync
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+WORKDIR /srv/app
+RUN pip install --no-cache-dir "psycopg[binary]==3.2.13"
+COPY app/storage.py ./app/storage.py
+COPY reports/sync_db.py ./sync_db.py
+USER 10001:10001
+ENTRYPOINT ["python", "sync_db.py"]
+
 FROM scanner AS api
 USER root
 COPY --from=report-runtime /usr/local/bin/node /usr/local/bin/node

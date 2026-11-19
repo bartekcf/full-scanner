@@ -2,11 +2,14 @@ schema_version: 1
 kind: report_copy
 language: pl-PL
 brand:
-  name: AudytorAI
-  email: null
-  website: null
-  legal_name: null
-  # Do not invent missing data. Populate from the repository/configuration.
+  name: Stronoskop
+  email: kontakt@codefellow.pl
+  website: https://codefellow.pl/
+  phone: '+48 795 309 804'
+  legal_name: Codefellow Sp. z o.o.
+  address: ul. Jana Kazimierza 64/163, 01-248 Warszawa
+  nip: '5223083362'
+  krs: '0000662912'
 report:
   title: 'Wstępna analiza bezpieczeństwa strony internetowej'
   labels:
@@ -52,9 +55,11 @@ report:
     remaining: 'Pozostałe obserwacje techniczne'
     coverage: 'Zakres i wyniki kontroli'
     limits: 'Ograniczenia analizy'
-    contact: 'Informacje o wykonawcy'
+    contact: 'Strona i kontakt'
   limitations: 'Analiza obejmowała wyłącznie publicznie dostępne zasoby i kontrole wskazane w tabeli zakresu. Nie obejmowała logowania do aplikacji, testów uprawnień, przeglądu kodu źródłowego ani prób wykorzystania podatności. Raport nie stanowi pełnego audytu bezpieczeństwa, certyfikacji ani potwierdzenia zgodności z przepisami.'
   cve_note: 'Dopasowania do bazy znanych podatności (CVE) wymagają potwierdzenia wersji oprogramowania, zastosowanych poprawek i warunków występowania podatności.'
-  contact_text: 'Analiza została przygotowana przez {brand}. W przypadku pytań dotyczących ustaleń przedstawionych w raporcie można skontaktować się z wykonawcą analizy.'
+  contact_text: 'W razie pytań dotyczących raportu można się z nami skontaktować:'
+  website_label: 'Więcej informacji na stronie'
+  operator_label: 'Serwis prowadzi'
   optional_extension_text: 'Zakres przeprowadzonej analizy nie obejmuje pełnego badania aplikacji. Szczegółowa weryfikacja ustaleń, mechanizmów uwierzytelniania, kontroli dostępu i konfiguracji może zostać wykonana w ramach odrębnie uzgodnionego audytu, za zgodą właściciela lub uprawnionego administratora serwisu.'
   optional_extension_default: false

@@ -117,6 +117,9 @@ services:
         condition: service_started
       egress:
         condition: service_healthy
+      report-sync:
+        condition: service_started
+        required: false
     networks:
       api_egress:
         ipv4_address: ${SCANNER_EGRESS_API_PREFIX:-172.31.250}.2
@@ -317,6 +320,48 @@ services:
           sleep 900
         fi
       done
+  report-db:
+    image: postgres:17-alpine@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b
+    profiles: [reports]
+    environment:
+      POSTGRES_DB: local_scanner
+      POSTGRES_USER: report_writer
+      POSTGRES_PASSWORD: ${REPORT_DB_WRITER_PASSWORD:-}
+    ports:
+    - "127.0.0.1:${REPORT_DB_PORT:-35432}:5432"
+    networks: [reporting]
+    volumes:
+    - report-db:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "report_writer", "-d", "local_scanner"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+  report-sync:
+    build:
+      context: .
+      target: report-sync
+    profiles: [reports]
+    depends_on:
+      report-db:
+        condition: service_healthy
+    environment:
+      PGHOST: report-db
+      PGDATABASE: local_scanner
+      PGUSER: report_writer
+      PGPASSWORD: ${REPORT_DB_WRITER_PASSWORD:-}
+      REPORT_DB_READER_PASSWORD: ${REPORT_DB_READER_PASSWORD:-}
+    networks: [reporting]
+    volumes:
+    - ./output:/output
+    user: ${LOCAL_UID:-1000}:${LOCAL_GID:-1000}
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+
 networks:
   api_egress:
     internal: true
@@ -345,7 +390,9 @@ networks:
       - subnet: ${SCANNER_EGRESS_INTERNET_SUBNET:-172.31.254.0/24}
   api_proxy:
     internal: true
+  reporting: {}
 volumes:
+  report-db: {}
   letsencrypt: {}
   certbot-webroot: {}
   certbot-lib: {}

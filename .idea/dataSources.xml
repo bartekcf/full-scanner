@@ -1,14 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="DataSourceManagerImpl" format="xml" multifile-model="true">
-    <data-source source="LOCAL" name="Local Scanner — kopia Windows" uuid="837062e4-0cb4-477f-9337-bd6cd7a09881">
+    <data-source source="LOCAL" name="Local Scanner — kopia SQLite" uuid="837062e4-0cb4-477f-9337-bd6cd7a09881">
       <driver-ref>sqlite.xerial</driver-ref>
       <synchronize>true</synchronize>
       <configured-by-url>true</configured-by-url>
       <jdbc-driver>org.sqlite.JDBC</jdbc-driver>
-      <jdbc-url>jdbc:sqlite:file:$USER_HOME$/Documents/Codex/2026-11-17/spr/outputs/scans-snapshot.sqlite3?mode=ro</jdbc-url>
+      <jdbc-url>jdbc:sqlite:file:\\wsl.localhost\Ubuntu\home\bartek\codeideas\local-scanner\output\raporty.sqlite3?mode=ro&amp;immutable=1</jdbc-url>
       <vm-options>--enable-native-access=ALL-UNNAMED -Dorg.sqlite.lib.path=C:/Users/barte/Documents/Codex/2026-11-17/spr/work</vm-options>
       <working-dir>$USER_HOME$/Documents/Codex/2026-11-17/spr</working-dir>
+    </data-source>
+    <data-source source="LOCAL" name="Local Scanner — na żywo" uuid="04b9d058-3bf7-4306-a12c-2111a32e6fa5">
+      <driver-ref>postgresql</driver-ref>
+      <synchronize>true</synchronize>
+      <configured-by-url>true</configured-by-url>
+      <jdbc-driver>org.postgresql.Driver</jdbc-driver>
+      <jdbc-url>jdbc:postgresql://127.0.0.1:35432/local_scanner?user=report_viewer</jdbc-url>
+      <working-dir>$ProjectFileDir$</working-dir>
     </data-source>
   </component>
 </project>

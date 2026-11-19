@@ -21,7 +21,7 @@ test('Searchable PDF, Polish characters, numbering and first-page incomplete cov
  assert.match(txt,/Wstępna analiza bezpieczeństwa strony/)
  assert.match(txt,/Pilna weryfikacja/);assert.match(txt,/Pewność detekcji: niska/)
  assert.match(pages[0],/Zakres analizy jest niepełny/);assert.match(pages[0],/Zalecamy/)
- assert.ok(pages.every(t=>t.replace(/AudytorAI.*|Strona \d+ \/ \d+/g,'').trim().length>100))
+ assert.ok(pages.every(t=>t.replace(/Stronoskop.*|Strona \d+ \/ \d+/g,'').trim().length>100))
  assert.doesNotMatch(txt,/\{target\}|\{date\}|undefined|\bNone\b|JSON|potwierdzona luka/)
  assert.match(txt,/U-01/)
 })
@@ -57,8 +57,18 @@ test('Sandbox rejects network and arbitrary filesystem reads',async()=>{
 test('Untrusted evidence never becomes markup, images, links or secrets',async()=>{
  const scan={...base,findings:[{...finding,id:'9999',title:'Unknown rule',evidence:'<img src="http://127.0.0.1/private"><script>SECRET</script> Authorization: Bearer SECRET'}]}
  const model=await prepareModel(scan)
- const definition=documentDefinition(model)
- assert.doesNotMatch(JSON.stringify(definition),/SECRET|127\.0\.0\.1|"image":|"svg":|"link":/)
+ const clean=await prepareModel({...scan,findings:[{...scan.findings[0],evidence:''}]})
+ const inspect=model=>{
+  const resources=[]
+  const json=JSON.stringify(documentDefinition(model),(key,value)=>{
+   if(key==='link'||key==='image'||key==='svg')resources.push([key,value])
+   return value
+  })
+  return {resources,json}
+ }
+ const {resources,json}=inspect(model)
+ assert.deepEqual(resources,inspect(clean).resources)
+ assert.doesNotMatch(json,/SECRET|127\.0\.0\.1|<(?:img|script)\b/)
  const txt=await pdfText(await renderPrepared(model))
  assert.doesNotMatch(txt,/SECRET|127\.0\.0\.1/)
 })

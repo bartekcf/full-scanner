@@ -14,7 +14,7 @@ import sys
 import tempfile
 import threading
 import time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, closing
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -24,6 +24,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.config import normalize_domain
+from app.storage import connect, publish_index, register_report
 
 logger = logging.getLogger("scanner.api")
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -177,10 +178,10 @@ def run_scanner(domain: str) -> tuple[dict, Path]:
     return record, batch
 
 
-def render_pdf(batch: Path) -> tuple[bytes, str]:
+def render_pdf(batch: Path, scan_id: str) -> tuple[bytes, str]:
     timeout = int(os.environ.get("API_PDF_TIMEOUT_SECONDS", "180"))
     try:
-        with tempfile.TemporaryDirectory(prefix="scanner-pdf-") as temporary:
+        with tempfile.TemporaryDirectory(prefix=".scanner-pdf-", dir=SCAN_OUTPUT) as temporary:
             output = Path(temporary) / "pdf"
             output.mkdir(mode=0o700)
             completed = _run_process(
@@ -202,10 +203,17 @@ def render_pdf(batch: Path) -> tuple[bytes, str]:
             path = files[0]
             if not PDF_NAME.fullmatch(path.name) or path.stat().st_size > MAX_PDF_BYTES:
                 raise ApiError(502, "pdf_result_invalid")
-            return path.read_bytes(), path.name
+            pdf = path.read_bytes()
+            destination = SCAN_OUTPUT / "pdf" / path.name
+            destination.parent.mkdir(exist_ok=True)
+            path.replace(destination)
+            with closing(connect(SCAN_OUTPUT)) as db:
+                register_report(db, SCAN_OUTPUT, scan_id, destination)
+                publish_index(db, SCAN_OUTPUT)
+            return pdf, path.name
     except ApiError:
         raise
-    except OSError as exc:
+    except (OSError, sqlite3.Error, ValueError) as exc:
         logger.error("PDF generator unavailable (%s)", type(exc).__name__)
         raise ApiError(502, "pdf_generation_failed") from exc
 
@@ -218,7 +226,7 @@ def process_scan(domain: str, want_pdf: bool) -> ScanResult:
         record, batch = run_scanner(domain)
         if not want_pdf:
             return ScanResult(record, None, None, remaining)
-        pdf, filename = render_pdf(batch)
+        pdf, filename = render_pdf(batch, record["scan_id"])
         return ScanResult(record, pdf, filename, remaining)
     finally:
         scan_slot.release()

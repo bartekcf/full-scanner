@@ -13,7 +13,7 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-from app.storage import connect, save
+from app.storage import connect, publish_index, save
 from app.config import Settings, EGRESS_PROXY_URL
 from app.cve import CveIntelligence
 from app.egress_policy import verify_egress_proxy
@@ -45,6 +45,8 @@ async def run(args):
             rows = list(reader)
     else:
         rows = [{"url": args.url}]
+        if args.gmina:
+            rows[0]["gmina"] = args.gmina
     if any(not row.get("url", "").strip() for row in rows):
         raise ValueError("Each row requires a nonempty URL")
     digest = hashlib.sha256(json.dumps(rows, sort_keys=True).encode()).hexdigest()
@@ -123,7 +125,10 @@ async def run(args):
         finally:
             await intelligence.close()
             await zap.close()
-            database.close()
+            try:
+                publish_index(database, args.output)
+            finally:
+                database.close()
         return 1 if failures else 0
 
 
@@ -133,9 +138,12 @@ def main():
     targets = parser.add_mutually_exclusive_group(required=True)
     targets.add_argument("--url")
     targets.add_argument("--csv", type=Path)
+    parser.add_argument("--gmina", help="Municipality name for --url")
     parser.add_argument("--output", type=Path, default=Path("/output"))
     parser.add_argument("--resume", type=Path, help="Existing batch directory")
     args = parser.parse_args()
+    if args.gmina is not None and not args.url:
+        parser.error("--gmina requires --url")
     try:
         code = asyncio.run(run(args))
     except KeyboardInterrupt:

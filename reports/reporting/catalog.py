@@ -101,7 +101,7 @@ class Catalog:
                 elif not isinstance(v,str): raise ValueError('Invalid override value')
         if p['fallback']['group'] not in p['groups'] or p['fallback']['priority'] not in p['priorities']: raise ValueError('Invalid fallback')
         if self.copy['report'].get('optional_extension_default') is not False: raise ValueError('Optional extension must be disabled')
-        for k in ('email','website','legal_name'):
+        for k in ('email','website','phone','legal_name','address','nip','krs'):
             if self.copy['brand'].get(k) is not None and not isinstance(self.copy['brand'][k],str): raise ValueError('Invalid brand')
         if self.copy['brand'].get('website') and not web_url(self.copy['brand']['website']): raise ValueError('Invalid brand website')
         def placeholders(obj):
@@ -111,7 +111,7 @@ class Catalog:
                 for v in obj: placeholders(v)
             elif isinstance(obj,str):
                 for _,field,fmt,conv in string.Formatter().parse(obj):
-                    if field is not None and (field not in {'date','target','priority_items','areas','checks','brand'} or fmt or conv): raise ValueError('Unknown placeholder')
+                    if field is not None and (field not in {'date','target','priority_items','areas','checks'} or fmt or conv): raise ValueError('Unknown placeholder')
         for doc in docs: placeholders(doc)
 
     def match(self, alert):

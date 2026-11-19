@@ -216,7 +216,8 @@ def build(scan,catalog=None):
     template=copy['report']['summaries'].get(kind)
     summary_text=(template.format(priority_items=', '.join(g['variants'][0]['title'] for g in findings[:3]),areas=', '.join(g['title'] for g in findings[:3])) if template else 'W częściowo wykonanej analizie nie odnotowano ustaleń wymagających działania. Brak wyników pozostałych kontroli uniemożliwia ocenę ich zakresu.')
     warnings=[]
-    if not copy['brand'].get('email') and not copy['brand'].get('website'):warnings.append('Brak danych kontaktowych wykonawcy. Uzupełnić konfigurację przed dystrybucją.')
+    if not any(copy['brand'].get(key) for key in ('email', 'website', 'phone')):
+        warnings.append('Brak danych kontaktowych wykonawcy. Uzupełnić konfigurację przed dystrybucją.')
     if not date:warnings.append('Brak daty skanu ze strefą czasową; raport nie zastępuje jej datą generowania.')
     if missing:warnings.append(f'Reguły wymagające rozszerzenia katalogu: {len(missing)} obserwacji; szczegóły w lokalnym logu.')
     cves=cve_candidates(scan)

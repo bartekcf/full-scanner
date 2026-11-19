@@ -472,11 +472,33 @@ function actionAndScope(model, firstSectionNumber) {
   const contact = [
     sectionLabel(`${serial()} / ${copy.sections.contact}`),
     { text: copy.sections.contact, style: "pageTitle", headlineLevel: 2 },
-    paragraph(copy.contact_text.replace("{brand}", brand.name), "bodyMuted"),
   ]
-  if (brand.email) contact.push(paragraph(brand.email))
-  if (brand.website) contact.push(paragraph(brand.website))
-  if (brand.legal_name) contact.push(paragraph(brand.legal_name))
+  const channels = [brand.email, brand.phone].filter(Boolean).join(" · ")
+  if (channels) contact.push(paragraph(`${copy.contact_text}\n${channels}`))
+  if (brand.website) {
+    contact.push({
+      text: [
+        `${copy.website_label} `,
+        {
+          text: text(brand.website.replace(/^https?:\/\/|\/$/gu, "")),
+          link: brand.website,
+          color: THEME.cyan,
+          decoration: "underline",
+        },
+        ".",
+      ],
+      style: "bodyMuted",
+      margin: [0, 0, 0, 7],
+    })
+  }
+  if (brand.legal_name) {
+    const operator = [
+      brand.address ? `${brand.legal_name}, ${brand.address}` : brand.legal_name,
+      brand.nip && `NIP ${brand.nip}`,
+      brand.krs && `KRS ${brand.krs}`,
+    ].filter(Boolean).join(" · ")
+    contact.push(paragraph(`${copy.operator_label} ${operator}`, "small"))
+  }
   contact.push(
     paragraph(
       `Numer raportu: ${model.metadata.report_id} · Generator ${model.metadata.generator_version}\nData źródłowa: ${model.metadata.scanned_at || "brak danych"} · Strefa: ${model.metadata.timezone}`,

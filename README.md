@@ -23,8 +23,10 @@ zgodne z użytkownikiem posiadającym katalog output.
 
 ## Batch i wznowienie
 
-CSV w input musi zawierać kolumnę url. Pozostałe kolumny są zachowywane
-w manifeście oraz metadanych wyniku.
+CSV w input musi zawierać kolumnę `url`. Opcjonalna kolumna `gmina` trafia
+do zestawienia w bazie. Pozostałe kolumny są zachowywane w manifeście i w
+metadanych wyniku. Dla pojedynczego adresu nazwę można podać przez
+`--url https://example.com/ --gmina "Nazwa gminy"`.
 
 ```sh
 docker compose run --rm scanner --csv /input/example.csv
@@ -68,12 +70,14 @@ Nie uruchamiano skanów ani testów automatycznych podczas wydzielania projektu.
 
 ## Baza wyników i filtrowanie
 
-Wspólna baza SQLite znajduje się w output/scans.sqlite3. Kolejne skany zapisują
-w niej pełny JSON, liczniki alertów oraz osobne rekordy alertów, błędów i kontroli
-HTTP. Pliki JSON pozostają dostępne do eksportu i wznowienia partii.
+Wspólna baza SQLite znajduje się w output/scans.sqlite3. Każdy skan zapisuje
+liczniki alertów oraz osobne rekordy alertów, błędów i kontroli HTTP. W tabeli
+alerts pole page_url wskazuje stronę z alertem; każdy rekord odpowiada jednemu
+wystąpieniu, więc można grupować po stronie, regule i poziomie ważności, aby
+policzyć ostrzeżenia. `--details` zwraca także zestawienie `page_warnings`.
+Pliki JSON pozostają dostępne do eksportu i wznowienia partii.
 Domyślnie wyszukiwanie pokazuje najnowszy skan każdego URL-a.
-Opcja --history obejmuje całą historię. --details dodaje nazwy alertów i błędy.
-Wyniki są sortowane według liczby alertów wysokich, średnich i niskich.
+Opcja --history obejmuje całą historię.
 
 ```sh
 docker compose run --rm --no-deps --entrypoint python scanner -m app.results --details
@@ -87,6 +91,40 @@ docker compose run --rm --no-deps --entrypoint python scanner -m app.results --i
 Filtry można łączyć. Dostępne są także --url, --status, --error, --check i --limit.
 Import JSON jest powtarzalny i aktualizuje rekord o tym samym scan_id.
 
+### Przeglądanie w PyCharm
+
+W oknie **Database** wybierz źródło **Local Scanner — na żywo**. Łączy się
+z lokalnym PostgreSQL pod `127.0.0.1:35432` jako `report_viewer` z prawem
+odczytu. Usługa `report-sync` przenosi zatwierdzone wyniki i ścieżki PDF z
+bazy SQLite w trakcie partii. W otwartej tabeli wybierz **Update Interval**
+i ustaw np. **5 s**, aby odświeżać widok w tej samej sesji.
+
+Aby uruchomić to połączenie na nowej instalacji, ustaw dwa różne losowe hasła
+w `.env` według `.env.example` i uruchom z katalogu projektu
+`docker compose --profile reports up -d --build report-sync`. Hasło do
+użytkownika `report_viewer` pochodzi z `REPORT_DB_READER_PASSWORD`.
+Opcjonalnie dodaj `reports` do `COMPOSE_PROFILES` w `.env`, aby zwykłe
+uruchomienie skanera startowało też usługę raportową.
+
+- `raporty` zawiera gminę, adres, status skanu, ścieżki PDF i JSON oraz
+  liczniki alertów według ważności.
+- `zagrozenia_wg_rodzaju` pokazuje liczbę wystąpień danej reguły i ważności
+  w każdym skanie, razem z gminą i ścieżką PDF.
+
+Ścieżki w kolumnach `sciezka_pdf` i `sciezka_json` są podane względem katalogu
+`output`. Pusta ścieżka PDF oznacza, że raport PDF nie został jeszcze zapisany
+dla danego skanu. Nazwa gminy pochodzi z `gmina` lub `client_name`; jeśli obu
+brakuje, pole jest puste. Przykładowe zapytanie w konsoli PyCharm:
+
+```sql
+SELECT gmina, url, sciezka_pdf, rodzaj, waznosc, liczba
+FROM zagrozenia_wg_rodzaju
+ORDER BY gmina, url, liczba DESC;
+```
+
+Aby ręcznie wyeksportować zestawienie do pliku SQLite, wykonaj w katalogu projektu
+`python3 -m app.results --output ./output --refresh-index`.
+
 ## Przekierowania
 
 ZAP śledzi maksymalnie pięć przekierowań HTTP. Każdy kolejny adres przechodzi
@@ -98,7 +136,7 @@ Pętla, brak nagłówka Location lub odrzucony adres kończą zadanie błędem.
 
 ## Raporty PDF z zapisanych skanów
 
-Generator w reports korzysta z szablonu AudytorAI i pdfmake 0.2.20.
+Generator raportów Stronoskop w `reports/` korzysta z pdfmake 0.2.20.
 Wymaga Node.js 22.18 lub nowszego. Uruchom go z katalogu local-scanner:
 
 ```sh
@@ -110,24 +148,27 @@ Możesz wskazać całe ./output. Generator odwiedza podkatalogi i pomija manifes
 nieukończone skany oraz powtórzone identyfikatory skanów w jednym uruchomieniu.
 Opcja --version full pozostaje obsługiwana dla zgodności. Oba warianty automatycznie
 dobierają szczegółowość i limit stron. PDF interpretuje alerty ZAP zapisane w findings
-i przedstawia kompletność danych dodatkowych. Nazwa odbiorcy pochodzi z kolumny client_name w CSV
-(przenoszonej do metadata); bez nazwy używana jest domena końcowa. Można też
-podać recipient, organization lub name w metadata. Nazwa pliku zawiera skrót
+i przedstawia kompletność danych dodatkowych. Nazwa pliku zawiera skrót
 zawartości skanu: ponowne generowanie tych samych danych zastępuje ten sam PDF,
 a zmienione dane tworzą nowy plik. Katalog wynikowy zawiera wyłącznie PDF-y;
 ostrzeżenia i błędy generatora są wypisywane w konsoli.
+Po zapisaniu PDF generator rejestruje ścieżkę w bazie skanów. Jeśli katalog PDF
+znajduje się poza `output`, wskaż katalog z bazą opcją `--database-dir ./output`.
 
 ### Treść i układ raportów
 
-Generator zachowuje układ i oprawę wizualną pierwszego raportu AudytorAI:
+Generator zachowuje dotychczasowy układ i oprawę wizualną:
 ciemne tło, identyfikację marki, karty podsumowania, priorytety, część
 szczegółową i numerację stron. Treści ustaleń, zaleceń, zakresu i ograniczeń
 pochodzą z katalogu `knowledge/`; jeden plik PDF łączy je z tym układem.
 
 Raport zawiera podsumowanie, wszystkie główne ustalenia z numerami U-01…,
-obserwacje techniczne, kandydatów CVE, zakres kontroli, ograniczenia i dane
-wykonawcy. Długie listy wystąpień są grupowane z reprezentatywnymi przykładami
-i podaną liczbą. Generator nie zapisuje JSON-ów w katalogu PDF.
+obserwacje techniczne, kandydatów CVE, zakres kontroli i ograniczenia.
+Na ostatniej stronie sekcja „Strona i kontakt” podaje e-mail i telefon w razie
+pytań o raport, klikalny adres strony Codefellow i dane rejestrowe operatora.
+Treść sekcji pochodzi z `knowledge/copy.yaml`.
+Długie listy wystąpień są grupowane z reprezentatywnymi przykładami i podaną
+liczbą. Generator nie zapisuje JSON-ów w katalogu PDF.
 
 ## HTTP API
 
