@@ -2,7 +2,7 @@ import {createHash} from 'node:crypto'
 import {mkdir,readdir,readFile,stat,writeFile,rename,rm} from 'node:fs/promises'
 import {basename,dirname,join,resolve} from 'node:path'
 import {parseArgs} from 'node:util'
-import {validateCatalog,prepareModel,registerReport,renderPrepared} from './pipeline.mjs'
+import {validateCatalog,prepareModel,prepareBriefModel,registerReport,renderPrepared,renderBriefPrepared} from './pipeline.mjs'
 
 async function* jsonFiles(dir,output,depth=0){
  if(depth>20)throw new Error('Przekroczono głębokość katalogów.')
@@ -16,8 +16,8 @@ async function* jsonFiles(dir,output,depth=0){
 const slug=value=>value.toLowerCase().normalize('NFKD').replace(/\p{Mark}/gu,'').replace(/[^a-z0-9.-]+/g,'-').replace(/^[.-]+|[.-]+$/g,'').slice(0,150)||'strona'
 async function atomic(path,data){const tmp=path+'.'+process.pid+'.tmp';try{await writeFile(tmp,data,{mode:0o600});await rename(tmp,path)}finally{await rm(tmp,{force:true})}}
 async function main(){
- const {values}=parseArgs({options:{input:{type:'string'},output:{type:'string'},version:{type:'string'},'database-dir':{type:'string'},help:{type:'boolean'}}})
- if(values.help){console.log('node reports/generate.mjs --input KATALOG_JSON --output KATALOG_PDF [--database-dir KATALOG_SKANOW]');return}
+ const {values}=parseArgs({options:{input:{type:'string'},output:{type:'string'},version:{type:'string'},'database-dir':{type:'string'},brief:{type:'boolean'},help:{type:'boolean'}}})
+ if(values.help){console.log('node reports/generate.mjs --input KATALOG_JSON --output KATALOG_PDF [--database-dir KATALOG_SKANOW] [--brief]');return}
  if(!values.input||!values.output)throw new Error('Podaj --input oraz --output.')
  if(values.version&&!['summary','full'].includes(values.version))throw new Error('Nieznany dawny wariant raportu.')
  if(values.version)console.error('Opcja --version jest zgodna wstecznie; powstaje jeden kompletny raport.')
@@ -34,7 +34,7 @@ async function main(){
    const scan=JSON.parse(await readFile(path,'utf8'))
    if(!scan||!['completed','failed'].includes(scan.status)||!scan.scan_id)continue
    if(seen.has(scan.scan_id))continue
-   const model=await prepareModel(scan);sourceId=model.metadata.report_id
+   const model=values.brief?await prepareBriefModel(scan):await prepareModel(scan);sourceId=model.metadata.report_id
    const date=model.metadata.scanned_at?.slice(0,10)||'brak-daty'
    const stem=slug(model.metadata.domain)+'--'+date
    const contentId=model.diagnostics.source_digest.slice(0,12)
@@ -42,6 +42,13 @@ async function main(){
    const destination=join(output,name)
    const pdf=await renderPrepared(model)
    await atomic(destination,pdf)
+   const names=[name]
+   if(values.brief){
+    const briefName=name.slice(0,-4)+'--brief.pdf'
+    const briefPdf=await renderBriefPrepared(model)
+    await atomic(join(output,briefName),briefPdf)
+    names.push(briefName)
+   }
    const batch = dirname(resolve(path))
    const resultsDir = dirname(batch)
    let databaseDir = values['database-dir'] && resolve(values['database-dir'])
@@ -53,7 +60,7 @@ async function main(){
    }
    if (databaseDir) await registerReport(databaseDir, scan.scan_id, destination)
    for(const warning of model.diagnostics.warnings)console.error(sourceId+': '+warning)
-   console.log(`[${++generated}] ${name}`);seen.add(scan.scan_id)
+   console.log(`[${++generated}] ${names.join(' + ')}`);seen.add(scan.scan_id)
   }catch(error){failed++;console.error(sourceId+': '+(error instanceof SyntaxError?'Nieprawidłowy JSON.':error.message))}
  }
  console.log(`Zapisane raporty: ${generated}. Błędy: ${failed}.`)

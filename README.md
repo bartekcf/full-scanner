@@ -142,7 +142,10 @@ Wymaga Node.js 22.18 lub nowszego. Uruchom go z katalogu local-scanner:
 ```sh
 npm --prefix reports ci
 node reports/generate.mjs --input ./output/batch-ID --output ./output/pdf
+node reports/generate.mjs --input ./output/batch-ID --output ./output/pdf --brief
 ```
+Opcja `--brief` generuje obok pełnego raportu osobny plik `--brief.pdf`.
+Wariant korzysta wyłącznie z zapisanego JSON-u i lokalnych danych; nie wymaga połączenia z siecią.
 
 Możesz wskazać całe ./output. Generator odwiedza podkatalogi i pomija manifesty,
 nieukończone skany oraz powtórzone identyfikatory skanów w jednym uruchomieniu.

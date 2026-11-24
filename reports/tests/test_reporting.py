@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 import yaml
 from reporting.catalog import Catalog, ROOT, name
-from reporting.model import build
+from reporting.model import build, brief_cve_candidates
 from reporting.privacy import safe_url, extract, csp, OMITTED
 
 C=Catalog()
@@ -125,6 +125,37 @@ class ModelTests(unittest.TestCase):
   self.assertEqual(len(m['technical_observations']),1);self.assertEqual(m['summary']['instance_count'],2000)
  def test_source_unchanged(self):
   d=scan([alert()]);before=copy.deepcopy(d);build(d,C);self.assertEqual(d,before)
+
+ def test_brief_cve_selection_requires_exact_version_and_evidence(self):
+  technology={'name':'PHP','version':'8.2.4','version_status':'declared','sources':['http_headers']}
+  def cve(identifier,**values):
+   row={'cve_id':identifier,'product':'PHP','technology_name':'PHP','detected_version':'8.2.4',
+        'match_status':'potentially_affected','confidence':'medium','backport_status':'unknown',
+        'affected_range':'<=8.2.4','description':'The parse_str function can overwrite arbitrary variables.',
+        'vendor_advisories':['http://bugs.php.net/bug.php?id=68665'],'cvss_score':7.5}
+   row.update(values);return row
+  result=brief_cve_candidates({'technologies':[technology],'cves':[
+   cve('CVE-2025-1000'),cve('CVE-2025-1000'),cve('CVE-2025-1005',cvss_score=9),
+   cve('CVE-2025-1006',cvss_score=8),cve('CVE-2025-1007',cvss_score=7),
+   cve('CVE-2025-1001',product='WordPress',cvss_score=10),
+   cve('CVE-2025-1002',backport_status='confirmed_patched',cvss_score=10),
+   cve('CVE-2025-1003',confidence='low',cvss_score=10),
+  ]})
+  self.assertEqual([row['identifier'] for row in result['items']],
+                   ['CVE-2025-1005','CVE-2025-1006','CVE-2025-1000'])
+  candidate=next(row for row in result['items'] if row['identifier']=='CVE-2025-1000')
+  self.assertEqual(candidate['vendor_link'],'https://bugs.php.net/bug.php?id=68665')
+  self.assertEqual(candidate['confidence_label'],'średnia')
+  self.assertIn('Potencjalne dopasowanie',candidate['match_status_label'])
+ def test_brief_does_not_infer_cves_from_partial_versions(self):
+  result=brief_cve_candidates({'technologies':[
+   {'name':'PHP','version':'5.6','version_status':'declared','sources':['http_headers']}
+  ],'cves':[{'cve_id':'CVE-2025-1000','product':'PHP','technology_name':'PHP',
+   'detected_version':'5.6','match_status':'potentially_affected','confidence':'high',
+   'affected_range':'all versions','cvss_score':10}]})
+  self.assertEqual(result['items'],[])
+  self.assertIn('PHP/5.6',result['note'])
+  self.assertIn('rewizję dystrybucji',result['note'])
 
 class PrivacyTests(unittest.TestCase):
  def test_url(self):

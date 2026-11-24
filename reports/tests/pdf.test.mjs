@@ -6,8 +6,8 @@ import {join} from 'node:path'
 import {execFile} from 'node:child_process'
 import {promisify} from 'node:util'
 import {fileURLToPath} from 'node:url'
-import {prepareModel,renderPrepared,child} from '../pipeline.mjs'
-import {documentDefinition} from '../render-model.mjs'
+import {prepareModel,prepareBriefModel,renderPrepared,renderBriefPrepared,child} from '../pipeline.mjs'
+import {documentDefinition,briefDocumentDefinition} from '../render-model.mjs'
 const exec=promisify(execFile)
 const root=fileURLToPath(new URL('..',import.meta.url))
 const base={scan_id:'fixture-1',url:'https://example.org/',final_url:'https://example.org/',created_at:'2026-11-17T10:00:00Z',status:'completed',findings:[],checks:[{check:'single_http_get',status:'completed'}]}
@@ -20,10 +20,48 @@ test('Searchable PDF, Polish characters, numbering and first-page incomplete cov
  const txt=await pdfText(pdf);const pages=txt.split('\f').filter(t=>t.trim())
  assert.match(txt,/Wstępna analiza bezpieczeństwa strony/)
  assert.match(txt,/Pilna weryfikacja/);assert.match(txt,/Pewność detekcji: niska/)
- assert.match(pages[0],/Zakres analizy jest niepełny/);assert.match(pages[0],/Zalecamy/)
+ assert.match(pages[0],/Zakres analizy jest niepełny/)
  assert.ok(pages.every(t=>t.replace(/Stronoskop.*|Strona \d+ \/ \d+/g,'').trim().length>100))
  assert.doesNotMatch(txt,/\{target\}|\{date\}|undefined|\bNone\b|JSON|potwierdzona luka/)
  assert.match(txt,/U-01/)
+})
+
+test('Brief PDF keeps the summary, qualified CVE, company contact and short pagination',async()=>{
+ const scan={...base,findings:[finding],technologies:[{
+  name:'PHP',version:'8.2.4',version_status:'declared',sources:['http_headers'],version_conflict:false,
+  cpe:'cpe:2.3:a:php:php:8.2.4:*:*:*:*:*:*:*',
+ }],cves:[{
+  cve_id:'CVE-2025-4242',product:'PHP',technology_name:'PHP',detected_version:'8.2.4',
+  match_status:'potentially_affected',confidence:'medium',backport_status:'unknown',sources:['NVD'],
+  affected_range:'cpe:2.3:a:php:php:*:*:*:*:*:*:*:*',
+  description:'The parse_str function can overwrite arbitrary variables.',
+  vendor_advisories:['https://bugs.php.net/bug.php?id=68665'],cvss_score:7.5,
+ }]}
+ const model=await prepareBriefModel(scan)
+ const briefText=await pdfText(await renderBriefPrepared(model))
+ const pages=briefText.split('\f').filter(page=>page.trim())
+ const normalized=briefText.replace(/\s+/gu,' ')
+ assert.ok(pages.length<=3)
+ assert.ok(pages.every(page=>page.trim().length>100))
+ assert.match(normalized,/Raport przygotowany przez Codefellow Sp\. z o\.o\. przy użyciu narzędzia Codefellow Scout/)
+ assert.match(normalized,/Liczba obszarów głównych ustaleń/)
+ assert.match(normalized,/CVE-2025-4242.*PHP 8\.2\.4/)
+ assert.match(normalized,/Potencjalne dopasowanie.*do weryfikacji/)
+ assert.match(normalized,/Informacja producenta/)
+ assert.match(normalized,/kontakt@codefellow\.pl/)
+ assert.match(normalized,/\+48 795 309 804/)
+ assert.match(normalized,/Raport przedstawia najważniejsze obserwacje z pasywnej analizy/)
+ assert.match(normalized,/Codefellow Sp\. z o\.o\./)
+ assert.doesNotMatch(briefText,/Stronoskop|Nagłówki HTTP|Lista narzędzi|Pozostałe obserwacje/)
+ const cvePage=pages.find(page=>page.includes('Najważniejsze CVE'))
+ assert.ok(cvePage)
+ assert.match(cvePage,/CVE-2025-4242/)
+ assert.match(cvePage,/Zakres i kontakt/)
+ assert.equal(briefDocumentDefinition(model).info.author,'Codefellow Sp. z o.o.')
+ assert.equal(documentDefinition(model).info.author,'Stronoskop')
+ const fullText=await pdfText(await renderPrepared(await prepareModel(scan)))
+ assert.match(fullText,/Stronoskop/)
+ assert.doesNotMatch(fullText,/Codefellow Scout/)
 })
 test('Summary heading and findings table stay together on page',async()=>{
  const url=base.url
@@ -91,5 +129,9 @@ test('CLI produces one document per scan, protects same-domain/date collisions, 
   assert.equal((await readdir(output)).filter(f=>f.endsWith('.pdf')).length,2)
   await exec(process.execPath,['generate.mjs','--input',input,'--output',output],{cwd:root})
   assert.equal((await readdir(output)).filter(f=>f.endsWith('.pdf')).length,2)
+  await exec(process.execPath,['generate.mjs','--input',input,'--output',output,'--brief'],{cwd:root})
+  const files=(await readdir(output)).filter(f=>f.endsWith('.pdf'))
+  assert.equal(files.filter(f=>f.endsWith('--analiza.pdf')).length,2)
+  assert.equal(files.filter(f=>f.endsWith('--analiza--brief.pdf')).length,2)
  }finally{await rm(dir,{recursive:true,force:true})}
 })

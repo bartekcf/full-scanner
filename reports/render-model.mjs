@@ -508,11 +508,86 @@ function actionAndScope(model, firstSectionNumber) {
   nodes.push({ stack: contact, unbreakable: true })
   return nodes
 }
+function briefCveSection(model) {
+  const brief = model.brief_cves || { items: [], note: "Zapis nie zawiera danych do oceny kandydatów CVE." }
+  const nodes = [
+    { ...sectionLabel("02 / NAJWAŻNIEJSZE CVE"), pageBreak: "before" },
+    { text: "Najważniejsze CVE", style: "pageTitle", headlineLevel: 2 },
+    paragraph(brief.note, "bodyMuted"),
+  ]
+  for (const item of brief.items) {
+    const content = [
+      { text: `${item.identifier} · ${item.product} ${item.version}`, style: "cardTitle", color: THEME.cyan },
+      paragraph(
+        `${item.match_status_label} — do weryfikacji · Pewność: ${item.confidence_label} · Poprawki dostawcy: ${item.backport_status_label}`,
+        "small"
+      ),
+      paragraph(item.explanation),
+      paragraph(`Zalecenie: ${item.recommendation}`, "bodyMuted"),
+      ...(item.vendor_link
+        ? [{
+            text: [{ text: "Informacja producenta", link: item.vendor_link, color: THEME.cyan, decoration: "underline" }],
+            fontSize: 8.5,
+            margin: [0, 0, 0, 7],
+          }]
+        : []),
+    ]
+    nodes.push({ unbreakable: true, stack: [panel(content)] })
+  }
+  return nodes
+}
+
+function briefScopeAndContact(model) {
+  const brand = model.copy.brand
+  const company = brand.legal_name || "Codefellow Sp. z o.o."
+  const contact = [
+    sectionLabel("03 / ZAKRES I KONTAKT"),
+    { text: "Zakres i kontakt", style: "pageTitle", headlineLevel: 2 },
+    paragraph(
+      "Raport przedstawia najważniejsze obserwacje z pasywnej analizy publicznie dostępnej strony. Ma charakter informacyjny i nie stanowi pełnego audytu bezpieczeństwa. Wskazane dopasowania CVE wymagają weryfikacji przez administratora serwisu.",
+      "bodyMuted"
+    ),
+    paragraph(
+      "W razie pytań dotyczących przedstawionych ustaleń prosimy o kontakt z Codefellow Sp. z o.o.",
+      "bodyMuted"
+    ),
+    { text: company, style: "cardTitle", color: THEME.cyan },
+    paragraph([brand.email, brand.phone].filter(Boolean).join(" · ")),
+  ]
+  if (brand.website) {
+    contact.push({
+      text: [{
+        text: text(brand.website.replace(/^https?:\/\/|\/$/gu, "")),
+        link: brand.website,
+        color: THEME.cyan,
+        decoration: "underline",
+      }],
+      style: "small",
+      margin: [0, 0, 0, 7],
+    })
+  }
+  const companyDetails = [
+    brand.address,
+    brand.nip && `NIP ${brand.nip}`,
+    brand.krs && `KRS ${brand.krs}`,
+  ].filter(Boolean).join(" · ")
+  if (companyDetails) contact.push(paragraph(companyDetails, "small"))
+  return [{ stack: contact, unbreakable: true }]
+}
+
 
 export function documentDefinition(model) {
+  return createDocumentDefinition(model, false)
+}
+
+export function briefDocumentDefinition(model) {
+  return createDocumentDefinition(model, true)
+}
+
+function createDocumentDefinition(model, brief) {
   const metadata = model.metadata
   const copy = model.copy.report
-  const brand = model.copy.brand
+  const brand = brief ? { ...model.copy.brand, name: "Codefellow Scout" } : model.copy.brand
   const date = metadata.scanned_at
     ? new Intl.DateTimeFormat("pl-PL", {
         dateStyle: "long",
@@ -551,46 +626,55 @@ export function documentDefinition(model) {
       margin: [0, 9, 0, 10],
     })
   }
-  if (model.summary.important_rows.length) {
-    nodes.push({
-      unbreakable: true,
-      stack: [
-        { text: copy.summary_headings[1], style: "pageTitle", headlineLevel: 2 },
-        dataTable(
-          ["Obszar", "Zaobserwowany element", "Zalecane działanie"],
-          model.summary.important_rows.map(row => [
-            row.area,
-            row.title,
-            `${row.recommendation} (${row.number})`,
-          ]),
-          ["25%", "35%", "40%"]
-        ),
-      ],
-    })
-    if (model.findings.length > model.summary.important_rows.length) {
-      nodes.push(
-        paragraph(
-          `Pozostałe ustalenia znajdują się w dalszej części tego samego raportu: ${model.findings.slice(model.summary.important_rows.length).map(group => group.number).join(", ")}.`,
-          "small"
+  if (brief) {
+    const company = model.copy.brand.legal_name || "Codefellow Sp. z o.o."
+    nodes.push(paragraph(
+      `Raport przygotowany przez ${company} przy użyciu narzędzia ${brand.name}`,
+      "small"
+    ))
+    nodes.push(...briefCveSection(model), ...briefScopeAndContact(model))
+  } else {
+    if (model.summary.important_rows.length) {
+      nodes.push({
+        unbreakable: true,
+        stack: [
+          { text: copy.summary_headings[1], style: "pageTitle", headlineLevel: 2 },
+          dataTable(
+            ["Obszar", "Zaobserwowany element", "Zalecane działanie"],
+            model.summary.important_rows.map(row => [
+              row.area,
+              row.title,
+              `${row.recommendation} (${row.number})`,
+            ]),
+            ["25%", "35%", "40%"]
+          ),
+        ],
+      })
+      if (model.findings.length > model.summary.important_rows.length) {
+        nodes.push(
+          paragraph(
+            `Pozostałe ustalenia znajdują się w dalszej części tego samego raportu: ${model.findings.slice(model.summary.important_rows.length).map(group => group.number).join(", ")}.`,
+            "small"
+          )
         )
-      )
+      }
     }
+    nodes.push(paragraph(model.summary.action, "bodyMuted"), paragraph(copy.review_notice, "small"))
+    let nextSection = 2
+    if (model.findings.length) nodes.push(...findingSections(model, nextSection++))
+    if (model.technical_observations.length) {
+      nodes.push(...technicalSection(model, nextSection++))
+    }
+    if (model.cve_candidates.length) nodes.push(...cveSection(model, nextSection++))
+    nodes.push(...actionAndScope(model, nextSection))
   }
-  nodes.push(paragraph(model.summary.action, "bodyMuted"), paragraph(copy.review_notice, "small"))
-  let nextSection = 2
-  if (model.findings.length) nodes.push(...findingSections(model, nextSection++))
-  if (model.technical_observations.length) {
-    nodes.push(...technicalSection(model, nextSection++))
-  }
-  if (model.cve_candidates.length) nodes.push(...cveSection(model, nextSection++))
-  nodes.push(...actionAndScope(model, nextSection))
 
   return {
     pageSize: "A4",
     pageMargins: [44, 78, 44, 60],
     info: {
       title: `${copy.title} — ${metadata.domain}`,
-      author: brand.name,
+      author: brief ? "Codefellow Sp. z o.o." : brand.name,
       subject: "Analiza zapisanych obserwacji pasywnych",
     },
     defaultStyle: {
@@ -708,8 +792,7 @@ export function documentDefinition(model) {
   }
 }
 
-export async function renderModel(model) {
-  const definition = documentDefinition(model)
+async function renderDefinition(definition) {
   return new Promise((resolve, reject) => {
     const stream = pdfMake.createPdf(definition, undefined, undefined, pdfFonts).getStream()
     const chunks = []
@@ -726,4 +809,12 @@ export async function renderModel(model) {
     stream.once("end", () => resolve(Buffer.concat(chunks)))
     stream.end()
   })
+}
+
+export async function renderModel(model) {
+  return renderDefinition(documentDefinition(model))
+}
+
+export async function renderBriefModel(model) {
+  return renderDefinition(briefDocumentDefinition(model))
 }

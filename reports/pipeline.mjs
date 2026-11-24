@@ -16,8 +16,14 @@ export function child(command,args,input,maxOutput=24*1024*1024,cwd=root){
  })
 }
 export async function validateCatalog(){return JSON.parse((await child(process.env.REPORT_PYTHON||'python3',['prepare.py','--validate'],'')).toString())}
-export async function prepareModel(scan){return JSON.parse((await child(process.env.REPORT_PYTHON||'python3',['prepare.py'],JSON.stringify(scan))).toString())}
+
+async function prepare(scan, args) {
+ return JSON.parse((await child(process.env.REPORT_PYTHON||'python3',['prepare.py',...args],JSON.stringify(scan))).toString())
+}
+export async function prepareModel(scan){return prepare(scan,[])}
+export async function prepareBriefModel(scan){return prepare(scan,['--brief'])}
 export async function renderPrepared(model){return child(process.execPath,['--max-old-space-size=384','render-worker.mjs'],JSON.stringify(model),32*1024*1024)}
+export async function renderBriefPrepared(model){return child(process.execPath,['--max-old-space-size=384','render-worker.mjs','--brief'],JSON.stringify(model),32*1024*1024)}
 
 export async function registerReport(output, scanId, pdf) {
  const project = fileURLToPath(new URL('..', import.meta.url))

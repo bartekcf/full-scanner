@@ -145,6 +145,162 @@ def cve_candidates(scan):
         g['statuses']=dict(g['statuses']);result.append(g)
     return result
 
+def _brief_product(value):
+    name=clean(value,100).casefold()
+    aliases={'apache':'apachehttpserver','httpd':'apachehttpserver'}
+    key=re.sub(r'[\W_]+','',name)
+    return aliases.get(key,key),clean(value,100)
+
+def _brief_version(value):
+    return isinstance(value,str) and re.fullmatch(r'\d+(?:\.\d+){2,5}',value.strip()) is not None
+
+def _brief_vendor_link(record,product):
+    values=[]
+    for field in ('vendor_advisories','references'):
+        field_values=record.get(field)
+        if isinstance(field_values,list):values.extend(field_values[:50])
+    for value in values[:100]:
+        if not isinstance(value,str) or len(value)>200:continue
+        if product=='php':
+            if match:=re.fullmatch(r'https?://(?:www\.)?php\.net/(ChangeLog-[578]\.php)(?:#([0-9]+\.[0-9]+\.[0-9]+))?',value,re.I):
+                return 'https://www.php.net/'+match[1]+('#'+match[2] if match[2] else '')
+            if match:=re.fullmatch(r'https?://(?:www\.)?bugs\.php\.net/bug\.php\?id=([0-9]{1,8})',value,re.I):
+                return 'https://bugs.php.net/bug.php?id='+match[1]
+            if match:=re.fullmatch(r'https://github\.com/php/php-src/security/advisories/(GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4})',value,re.I):
+                return 'https://github.com/php/php-src/security/advisories/'+match[1].lower()
+        if product=='apachehttpserver':
+            if match:=re.fullmatch(r'https?://httpd\.apache\.org/security/vulnerabilities_(22|24)\.html#(CVE-\d{4}-\d{4,12})',value,re.I):
+                return f'https://httpd.apache.org/security/vulnerabilities_{match[1]}.html#{match[2].upper()}'
+    return ''
+
+def _brief_cve_impact(description):
+    text=clean(description,1500).casefold()
+    if re.search(r'\bparse[_ ]str\b|overwrite arbitrary variables',text):
+        return 'Jeśli aplikacja wywołuje parse_str bez drugiego argumentu, dane wejściowe mogą nadpisać zmienne; znaczenie zależy od użycia tej funkcji w serwisie.'
+    if re.search(r'remote code execution|execute arbitrary code|arbitrary code execution',text):
+        return 'W spełnionych warunkach podatność może umożliwić wykonanie kodu na serwerze i naruszyć działanie serwisu.'
+    if re.search(r'sql injection|sql commands?',text):
+        return 'W spełnionych warunkach podatność może umożliwić odczyt lub zmianę danych obsługiwanych przez serwis.'
+    if re.search(r'cross.site scripting|\bxss\b',text):
+        return 'W spełnionych warunkach podatność może umożliwić uruchomienie skryptu w przeglądarce użytkownika serwisu.'
+    if re.search(r'denial.of.service|\bdos\b|resource exhaustion',text):
+        return 'W spełnionych warunkach podatność może zakłócić dostępność serwisu.'
+    if re.search(r'authentication bypass|authorization bypass|privilege escalation',text):
+        return 'W spełnionych warunkach podatność może pozwolić ominąć kontrolę dostępu lub uzyskać nieuprawnione możliwości.'
+    if re.search(r'information disclosure|information leak|arbitrary file read|read arbitrary files',text):
+        return 'W spełnionych warunkach podatność może ujawnić dane lub pliki dostępne dla komponentu serwera.'
+    if re.search(r'server.side request forgery|\bssrf\b',text):
+        return 'W spełnionych warunkach podatność może pozwolić wymusić żądania z serwera do innych zasobów.'
+    if re.search(r'path traversal|directory traversal|arbitrary file write|write arbitrary files',text):
+        return 'W spełnionych warunkach podatność może umożliwić dostęp do plików poza zamierzonym zakresem.'
+    return 'Opis wskazuje na problem w komponencie; wpływ na serwis zależy od warunków w komunikacie producenta i konfiguracji pakietu.'
+
+def brief_cve_candidates(scan):
+    """Choose only CVEs tied to a reliable, exact technology version and scanner match."""
+    technologies={}
+    for technology in array(scan,'technologies'):
+        if not isinstance(technology,dict):continue
+        key,product=_brief_product(technology.get('name'))
+        if not key:continue
+        entry=technologies.setdefault(key,{'product':product,'versions':set(),'conflict':False})
+        entry['conflict']|=bool(technology.get('version_conflict'))
+        source_values=technology.get('sources')
+        sources=[source for source in source_values if isinstance(source,str)] if isinstance(source_values,list) else []
+        status=technology.get('version_status')
+        reliable=bool(sources and (status in ('declared','verified') or
+                                   (status=='fingerprinted' and len(set(sources))>1)))
+        version=technology.get('version')
+        if reliable and _brief_version(version):entry['versions'].add(version.strip())
+
+    candidates=[]
+    weak_versions,conflicts=set(),set()
+    cve_rows=array(scan,'cves')
+    for record in cve_rows:
+        if not isinstance(record,dict):continue
+        match_status=record.get('match_status')
+        if match_status not in ('confirmed_affected_version','potentially_affected'):continue
+        identifier=record.get('cve_id')
+        if not isinstance(identifier,str) or not re.fullmatch(r'CVE-\d{4}-\d{4,}',identifier,re.I):continue
+        technology_name=record.get('technology_name')
+        source_product=record.get('product')
+        key,product=_brief_product(technology_name or source_product)
+        source_key,_=_brief_product(source_product)
+        if technology_name and source_product and source_key and source_key!=key:
+            conflicts.add(product or clean(source_product,100))
+            continue
+        technology=technologies.get(key)
+        detected=record.get('detected_version')
+        if not technology or not technology['versions']:
+            weak_versions.add(f'{product}/{clean(detected,50) or "brak wersji"}')
+            continue
+        if technology['conflict'] or len(technology['versions'])!=1:
+            conflicts.add(product)
+            continue
+        version=next(iter(technology['versions']))
+        if not _brief_version(version) or detected!=version:
+            weak_versions.add(f'{product}/{clean(detected,50) or version}')
+            continue
+
+        confidence=record.get('confidence')
+        if confidence not in ('high','medium'):continue
+        backport=record.get('backport_status') or 'unknown'
+        if backport in ('confirmed','patched','backported','confirmed_patched',
+                        'confirmed_backport','backport_confirmed'):continue
+        if not record.get('affected_range') and not record.get('applicability'):continue
+
+        score=record.get('cvss_score')
+        if isinstance(score,bool) or not isinstance(score,(int,float)) or not 0<=score<=10:score=None
+        candidates.append({
+            'identifier':identifier.upper(),
+            'product':product,
+            'version':version,
+            'match_status_label':('Potencjalne dopasowanie — do weryfikacji'
+                                  if match_status=='potentially_affected'
+                                  else 'Wersja pasuje do zakresu'),
+            'confidence_label':{'high':'wysoka','medium':'średnia'}[confidence],
+            'backport_status_label':('brak poprawki zapisany'
+                                     if backport in ('not_patched','confirmed_not_patched','not_backported')
+                                     else 'nieustalony'),
+            'explanation':_brief_cve_impact(record.get('description')),
+            'recommendation':('Porównać pełne wydanie pakietu i poprawki dostawcy z komunikatem producenta; '
+                              'zastosować wskazane wydanie naprawione, jeśli zakres potwierdzi dopasowanie.'),
+            'vendor_link':_brief_vendor_link(record,key),
+            'cvss_score':score,
+            'cisa_kev':record.get('cisa_kev') is True,
+            'match_rank':0 if match_status=='confirmed_affected_version' else 1,
+            'confidence_rank':0 if confidence=='high' else 1,
+            'backport_rank':0 if backport in ('not_patched','confirmed_not_patched','not_backported') else 1,
+        })
+
+    candidates.sort(key=lambda item:(item['match_rank'],item['confidence_rank'],item['backport_rank'],
+                                     not item['cisa_kev'],
+                                     -(item['cvss_score'] if item['cvss_score'] is not None else -1),
+                                     item['identifier']))
+    selected,seen=[],set()
+    for candidate in candidates:
+        if candidate['identifier'] in seen:continue
+        seen.add(candidate['identifier'])
+        selected.append({key:value for key,value in candidate.items()
+                         if key not in ('match_rank','confidence_rank','backport_rank')})
+        if len(selected)==3:break
+
+    if selected:
+        note=('Dopasowanie zakresu wersji nie potwierdza podatności serwisu; status poprawek dostawcy '
+              'i warunki występowania należy potwierdzić u administratora.')
+    elif not cve_rows:
+        note='Zapisany JSON nie zawiera kandydatów CVE.'
+    elif weak_versions:
+        note=(f'Zapisane dopasowania dla {", ".join(sorted(weak_versions)[:3])} są zbyt ogólne, aby wskazać konkretne CVE. '
+              'Administrator powinien ustalić dokładne wydanie pakietu, w tym rewizję dystrybucji, '
+              'oraz stan poprawek lub backportów dostawcy.')
+    elif conflicts:
+        note=(f'Zapis zawiera sprzeczne wersje {", ".join(sorted(conflicts)[:3])}; administrator powinien ustalić '
+              'dokładne wydanie pakietu i stan poprawek dostawcy przed oceną CVE.')
+    else:
+        note=('Zapis nie pozwala potwierdzić wiarygodnego dopasowania CVE do rozpoznanej technologii i jej wersji. '
+              'Administrator powinien porównać pełne wydanie pakietu oraz poprawki dostawcy z komunikatem producenta.')
+    return {'items':selected,'note':note}
+
 def build(scan,catalog=None):
     if not isinstance(scan,dict):raise ValueError('Scan must be object')
     catalog=catalog or Catalog();policy=catalog.policy;copy=catalog.copy
