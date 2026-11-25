@@ -60,7 +60,9 @@ async function main(){
    }
    if (databaseDir) await registerReport(databaseDir, scan.scan_id, destination)
    for(const warning of model.diagnostics.warnings)console.error(sourceId+': '+warning)
-   console.log(`[${++generated}] ${names.join(' + ')}`);seen.add(scan.scan_id)
+   const cveCount=values.brief?model.brief_cves.items.length:0
+   const cveStatus=values.brief?(cveCount===0?'; CVE: 0 (brak wiarygodnych dopasowań)':`; CVE: ${cveCount} wybranych`):''
+   console.log(`[${++generated}] ${names.join(' + ')}${cveStatus}`);seen.add(scan.scan_id)
   }catch(error){failed++;console.error(sourceId+': '+(error instanceof SyntaxError?'Nieprawidłowy JSON.':error.message))}
  }
  console.log(`Zapisane raporty: ${generated}. Błędy: ${failed}.`)

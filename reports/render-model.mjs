@@ -509,13 +509,15 @@ function actionAndScope(model, firstSectionNumber) {
   return nodes
 }
 function briefCveSection(model) {
-  const brief = model.brief_cves || { items: [], note: "Zapis nie zawiera danych do oceny kandydatów CVE." }
+  const brief = model.brief_cves
+  const items = Array.isArray(brief?.items) ? brief.items.slice(0, 3) : []
+  if (!items.length) return []
   const nodes = [
     { ...sectionLabel("02 / NAJWAŻNIEJSZE CVE"), pageBreak: "before" },
     { text: "Najważniejsze CVE", style: "pageTitle", headlineLevel: 2 },
-    paragraph(brief.note, "bodyMuted"),
+    ...(brief.note ? [paragraph(brief.note, "bodyMuted")] : []),
   ]
-  for (const item of brief.items) {
+  for (const item of items) {
     const content = [
       { text: `${item.identifier} · ${item.product} ${item.version}`, style: "cardTitle", color: THEME.cyan },
       paragraph(
@@ -537,11 +539,11 @@ function briefCveSection(model) {
   return nodes
 }
 
-function briefScopeAndContact(model) {
+function briefScopeAndContact(model, sectionNumber) {
   const brand = model.copy.brand
   const company = brand.legal_name || "Codefellow Sp. z o.o."
   const contact = [
-    sectionLabel("03 / ZAKRES I KONTAKT"),
+    sectionLabel(`${String(sectionNumber).padStart(2, "0")} / ZAKRES I KONTAKT`),
     { text: "Zakres i kontakt", style: "pageTitle", headlineLevel: 2 },
     paragraph(
       "Raport przedstawia najważniejsze obserwacje z pasywnej analizy publicznie dostępnej strony. Ma charakter informacyjny i nie stanowi pełnego audytu bezpieczeństwa. Wskazane dopasowania CVE wymagają weryfikacji przez administratora serwisu.",
@@ -627,12 +629,14 @@ function createDocumentDefinition(model, brief) {
     })
   }
   if (brief) {
+    const hasCves = Array.isArray(model.brief_cves?.items) && model.brief_cves.items.length > 0
     const company = model.copy.brand.legal_name || "Codefellow Sp. z o.o."
     nodes.push(paragraph(
       `Raport przygotowany przez ${company} przy użyciu narzędzia ${brand.name}`,
       "small"
     ))
-    nodes.push(...briefCveSection(model), ...briefScopeAndContact(model))
+    if (hasCves) nodes.push(...briefCveSection(model))
+    nodes.push(...briefScopeAndContact(model, hasCves ? 3 : 2))
   } else {
     if (model.summary.important_rows.length) {
       nodes.push({

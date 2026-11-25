@@ -254,7 +254,7 @@ def brief_cve_candidates(scan):
             'identifier':identifier.upper(),
             'product':product,
             'version':version,
-            'match_status_label':('Potencjalne dopasowanie — do weryfikacji'
+            'match_status_label':('Potencjalne dopasowanie'
                                   if match_status=='potentially_affected'
                                   else 'Wersja pasuje do zakresu'),
             'confidence_label':{'high':'wysoka','medium':'średnia'}[confidence],
