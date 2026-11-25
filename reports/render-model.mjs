@@ -704,11 +704,11 @@ function paperParagraph(value, style = "paperBody") {
   return { text: text(value), style, margin: [0, 0, 0, 6] }
 }
 
-function paperPanel(content, borderColor = PAPER_THEME.border, fillColor = PAPER_THEME.paleBlue) {
+function paperPanel(content, borderColor = PAPER_THEME.border, fillColor = PAPER_THEME.paleBlue, padding = [12, 10, 12, 10], marginBottom = 9) {
   return {
     table: {
       widths: ["100%"],
-      body: [[{ stack: content, fillColor, margin: [12, 10, 12, 10] }]],
+      body: [[{ stack: content, fillColor, margin: padding }]],
     },
     layout: {
       hLineWidth: () => 0.65,
@@ -720,7 +720,7 @@ function paperPanel(content, borderColor = PAPER_THEME.border, fillColor = PAPER
       paddingTop: () => 0,
       paddingBottom: () => 0,
     },
-    margin: [0, 0, 0, 9],
+    margin: [0, 0, 0, marginBottom],
   }
 }
 
@@ -779,6 +779,92 @@ function paperShield(color = PAPER_THEME.steel) {
     height: 27,
   }
 }
+function paperBrandMark() {
+  return {
+    canvas: [
+      {
+        type: "polyline",
+        points: [
+          { x: 13, y: 0 }, { x: 24, y: 5 }, { x: 22, y: 18 },
+          { x: 13, y: 27 }, { x: 4, y: 18 }, { x: 2, y: 5 },
+        ],
+        closePath: true,
+        color: PAPER_THEME.steel,
+        lineColor: PAPER_THEME.steel,
+        lineWidth: 0.7,
+      },
+      { type: "ellipse", x: 13, y: 10, r1: 2.4, r2: 2.4, color: PAPER_THEME.white },
+      { type: "rect", x: 11.4, y: 12, w: 3.2, h: 6.2, color: PAPER_THEME.white },
+    ],
+    width: 27,
+    height: 28,
+  }
+}
+
+function paperOrbitGraphic() {
+  const dots = []
+  for (let row = 0; row < 5; row += 1) {
+    for (let column = 0; column < 5; column += 1) {
+      dots.push({
+        type: "ellipse",
+        x: 7 + column * 8,
+        y: 10 + row * 8,
+        r1: 0.8,
+        r2: 0.8,
+        color: "#DCE7EC",
+      })
+    }
+  }
+  return {
+    canvas: [
+      ...dots,
+      { type: "ellipse", x: 83, y: 73, r1: 68, r2: 68, fillOpacity: 0, lineColor: "#DFE9EE", lineWidth: 0.7 },
+      { type: "ellipse", x: 83, y: 73, r1: 52, r2: 52, fillOpacity: 0, lineColor: "#CEDDE5", lineWidth: 0.65 },
+      { type: "ellipse", x: 83, y: 73, r1: 36, r2: 36, fillOpacity: 0, lineColor: "#E2EBEF", lineWidth: 0.6 },
+      { type: "ellipse", x: 132, y: 26, r1: 3.1, r2: 3.1, color: "#86C5B6" },
+      { type: "ellipse", x: 37, y: 103, r1: 2.5, r2: 2.5, color: "#9AB8C8" },
+      { type: "ellipse", x: 120, y: 124, r1: 2.1, r2: 2.1, color: "#9AB8C8" },
+      {
+        type: "polyline",
+        points: [
+          { x: 83, y: 48 }, { x: 102, y: 56 }, { x: 100, y: 79 },
+          { x: 83, y: 95 }, { x: 66, y: 79 }, { x: 64, y: 56 },
+        ],
+        closePath: true,
+        color: PAPER_THEME.steel,
+        lineColor: PAPER_THEME.steel,
+        lineWidth: 0.7,
+      },
+      { type: "ellipse", x: 83, y: 66, r1: 3.5, r2: 3.5, color: PAPER_THEME.white },
+      { type: "rect", x: 80.6, y: 68, w: 4.8, h: 11, color: PAPER_THEME.white },
+    ],
+    width: 165,
+    height: 145,
+  }
+}
+
+function paperHero(model, date, copy) {
+  return paperPanel([
+    {
+      columns: [
+        {
+          stack: [
+            { text: "ANALIZA PASYWNA", style: "paperEyebrow" },
+            { text: copy.title, style: "paperTitle" },
+            { text: text(model.metadata.domain), style: "paperDomain" },
+            { text: date ? `Analiza z ${date} r.` : "Data analizy: brak w zapisie.", style: "paperDate" },
+            { text: "PODSUMOWANIE ANALIZY", style: "paperOverline", margin: [0, 4, 0, 2] },
+            paperParagraph(model.summary.text, "paperBodyMuted"),
+          ],
+          width: "*",
+        },
+        paperOrbitGraphic(),
+      ],
+      columnGap: 6,
+    },
+  ], PAPER_THEME.border, PAPER_THEME.white, [12, 8, 12, 8], 6)
+}
+
 
 function paperPlural(count, forms) {
   const lastTwo = count % 100
@@ -793,14 +879,12 @@ function paperPriorityLegendItem(key, priority, count) {
     columns: [
       {
         canvas: [{
-          type: "rect",
-          x: 0,
-          y: 1,
-          w: 8,
-          h: 8,
+          type: "ellipse",
+          x: 4,
+          y: 5,
+          r1: 3.5,
+          r2: 3.5,
           color: PAPER_PRIORITY_COLORS[key] || PAPER_THEME.steel,
-          lineColor: PAPER_THEME.graphite,
-          lineWidth: 0.3,
         }],
         width: 12,
       },
@@ -877,7 +961,7 @@ function paperAreaPanel(data) {
   ]
   if (!data.areas.length) {
     content.push({ text: "Brak ustaleń do pogrupowania", style: "paperBodyMuted" })
-    return paperPanel(content)
+    return paperPanel(content, PAPER_THEME.border, PAPER_THEME.white, [12, 6, 12, 6], 6)
   }
   for (const area of data.areas) {
     content.push({
@@ -903,16 +987,16 @@ function paperAreaPanel(data) {
               y: 0,
               w: (area.count / data.maximum) * 468,
               h: 4,
-              color: PAPER_THEME.steel,
+              color: PAPER_PRIORITY_COLORS[area.priority] || PAPER_THEME.steel,
             },
           ],
-          margin: [0, 2, 0, 5],
+          margin: [0, 1, 0, 3],
         },
       ],
       margin: [0, 0, 0, 1],
     })
   }
-  return paperPanel(content)
+  return paperPanel(content, PAPER_THEME.border, PAPER_THEME.white, [12, 6, 12, 6], 6)
 }
 
 function lowerFirst(value) {
@@ -1021,16 +1105,10 @@ function paperCveSection(model, groups) {
     ? [paperPanel([paperParagraph(model.brief_cves.note, "paperBodyMuted")], PAPER_THEME.border, PAPER_THEME.white)]
     : []
   return [
-    {
-      stack: [
-        paperSectionLabel("USTALENIA PRIORYTETOWE"),
-        { text: groups.length === 1 ? `Środowisko ${groups[0].product}` : "Komponenty do sprawdzenia", style: "paperPageTitle", headlineLevel: 2 },
-        ...note,
-        firstGroup,
-      ],
-      unbreakable: true,
-      pageBreak: "before",
-    },
+    { ...paperSectionLabel("USTALENIA PRIORYTETOWE"), pageBreak: "before" },
+    { text: groups.length === 1 ? `Środowisko ${groups[0].product}` : "Komponenty do sprawdzenia", style: "paperPageTitle", headlineLevel: 2 },
+    ...note,
+    firstGroup,
     ...groups.slice(1).map(paperCveGroupPanel),
   ]
 }
@@ -1128,47 +1206,11 @@ function paperScopePage(model, date) {
 }
 
 function paperBackground(_page, size) {
-  const dots = []
-  for (let row = 0; row < 3; row += 1) {
-    for (let column = 0; column < 4; column += 1) {
-      dots.push({
-        type: "ellipse",
-        x: size.width - 59 + column * 7,
-        y: 45 + row * 7,
-        r1: 1,
-        r2: 1,
-        color: "#C7D7DF",
-      })
-    }
-  }
   return {
     canvas: [
       { type: "rect", x: 0, y: 0, w: size.width, h: size.height, color: PAPER_THEME.white },
       { type: "rect", x: 0, y: 0, w: size.width, h: 5, color: PAPER_THEME.steel },
       { type: "rect", x: 0, y: 5, w: size.width * 0.3, h: 2, color: PAPER_THEME.paleBlue },
-      {
-        type: "ellipse",
-        x: size.width - 40,
-        y: 37,
-        r1: 53,
-        r2: 25,
-        color: PAPER_THEME.white,
-        fillOpacity: 0,
-        lineColor: "#D9E4E9",
-        lineWidth: 0.6,
-      },
-      {
-        type: "ellipse",
-        x: size.width - 40,
-        y: 37,
-        r1: 38,
-        r2: 17,
-        color: PAPER_THEME.white,
-        fillOpacity: 0,
-        lineColor: "#E2EAEE",
-        lineWidth: 0.5,
-      },
-      ...dots,
     ],
   }
 }
@@ -1176,7 +1218,7 @@ function paperBackground(_page, size) {
 function paperHeader(domain) {
   return {
     columns: [
-      paperShield(),
+      paperBrandMark(),
       { text: "Codefellow Scout", style: "paperHeaderBrand", width: 145 },
       { text: text(domain), style: "paperHeaderDomain", alignment: "right", width: "*" },
     ],
@@ -1230,39 +1272,15 @@ function briefWhiteDocumentDefinition(model) {
   const observations = briefObservations(model)
   const urgent = model.findings.some(finding => finding.priority === "urgent")
   const nodes = [
-    {
-      columns: [
-        {
-          stack: [
-            { text: "ANALIZA PASYWNA", style: "paperEyebrow" },
-            { text: copy.title, style: "paperTitle" },
-            { text: text(metadata.domain), style: "paperDomain" },
-          ],
-          width: "*",
-        },
-        {
-          stack: [
-            { text: "DATA ANALIZY", style: "paperOverline", alignment: "right" },
-            { text: date || "Brak daty", style: "paperDate", alignment: "right" },
-          ],
-          width: 118,
-        },
-      ],
-      columnGap: 12,
-      margin: [0, 0, 0, 6],
-    },
-    paperPanel([
-      { text: "PODSUMOWANIE ANALIZY", style: "paperOverline", margin: [0, 0, 0, 4] },
-      paperParagraph(model.summary.text, "paperBodyMuted"),
-    ], PAPER_THEME.border, PAPER_THEME.white),
-    paperSectionLabel("ROZKŁAD PRIORYTETÓW"),
-    paperPanel(paperPriorityContent(data)),
-    paperSectionLabel("OBSZARY USTALEŃ"),
+    paperHero(model, date, copy),
+    { ...paperSectionLabel("ROZKŁAD PRIORYTETÓW"), margin: [0, 6, 0, 5] },
+    paperPanel(paperPriorityContent(data), PAPER_THEME.border, PAPER_THEME.white, [12, 8, 12, 8], 6),
+    { ...paperSectionLabel("OBSZARY USTALEŃ"), margin: [0, 6, 0, 5] },
     paperAreaPanel(data),
     paperPanel([
       { text: "W PIERWSZEJ KOLEJNOŚCI", style: "paperCardTitle", color: urgent ? PAPER_THEME.urgent : PAPER_THEME.steel },
       paperParagraph(paperLeadRecommendation(model), "paperRecommendation"),
-    ], urgent ? PAPER_THEME.urgent : PAPER_THEME.steel, PAPER_THEME.paleBlue),
+    ], urgent ? PAPER_THEME.urgent : PAPER_THEME.steel, PAPER_THEME.paleBlue, [12, 7, 12, 7], 6),
   ]
   nodes.push(
     ...paperCveSection(model, cveGroups),
@@ -1291,8 +1309,8 @@ function briefWhiteDocumentDefinition(model) {
       paperHeaderDomain: { fontSize: 7.2, color: PAPER_THEME.muted, margin: [0, 8, 0, 0] },
       paperFooter: { fontSize: 6.8, color: PAPER_THEME.muted },
       paperEyebrow: { fontSize: 8, bold: true, characterSpacing: 1.1, color: PAPER_THEME.steel, margin: [0, 0, 0, 4] },
-      paperTitle: { fontSize: 22, bold: true, color: PAPER_THEME.graphite, lineHeight: 1.08, margin: [0, 0, 0, 4] },
-      paperDomain: { fontSize: 14, bold: true, color: PAPER_THEME.steel, margin: [0, 0, 0, 5] },
+      paperTitle: { fontSize: 26, bold: true, color: PAPER_THEME.graphite, lineHeight: 1.04, margin: [0, 0, 0, 5] },
+      paperDomain: { fontSize: 16, bold: true, color: PAPER_THEME.steel, margin: [0, 0, 0, 5] },
       paperDate: { fontSize: 8.5, bold: true, color: PAPER_THEME.graphite, margin: [0, 3, 0, 0] },
       paperOverline: { fontSize: 7, bold: true, characterSpacing: 0.55, color: PAPER_THEME.steel },
       paperSection: { fontSize: 8, bold: true, characterSpacing: 0.7, color: PAPER_THEME.steel, margin: [0, 1, 0, 0] },
@@ -1312,7 +1330,6 @@ function briefWhiteDocumentDefinition(model) {
       paperCompany: { fontSize: 12, bold: true, color: PAPER_THEME.graphite, margin: [0, 0, 0, 9] },
       paperContact: { fontSize: 9, bold: true, color: PAPER_THEME.steel, margin: [0, 3, 0, 0] },
     },
-    pageBreakBefore: (node, following) => node.headlineLevel === 2 && following.length === 0,
     content: nodes,
   }
 }
