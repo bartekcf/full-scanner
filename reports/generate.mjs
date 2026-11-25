@@ -17,16 +17,18 @@ const slug=value=>value.toLowerCase().normalize('NFKD').replace(/\p{Mark}/gu,'')
 async function atomic(path,data){const tmp=path+'.'+process.pid+'.tmp';try{await writeFile(tmp,data,{mode:0o600});await rename(tmp,path)}finally{await rm(tmp,{force:true})}}
 async function main(){
  const {values}=parseArgs({options:{input:{type:'string'},output:{type:'string'},version:{type:'string'},'database-dir':{type:'string'},brief:{type:'boolean'},'brief-white':{type:'boolean'},help:{type:'boolean'}}})
+ const brief=Boolean(values.brief||process.argv.includes('--brief'))
+ const briefWhite=Boolean(values['brief-white']||values.briefWhite||process.argv.includes('--brief-white'))
  if(values.help){console.log('node reports/generate.mjs --input KATALOG_JSON --output KATALOG_PDF [--database-dir KATALOG_SKANOW] [--brief | --brief-white]');return}
  if(!values.input||!values.output)throw new Error('Podaj --input oraz --output.')
  if(values.version&&!['summary','full'].includes(values.version))throw new Error('Nieznany dawny wariant raportu.')
- if(values.brief&&values['brief-white'])throw new Error('Wybierz jeden wariant skrócony: --brief albo --brief-white.')
+ if(brief&&briefWhite)throw new Error('Wybierz jeden wariant skrócony: --brief albo --brief-white.')
  if(values.version)console.error('Opcja --version jest zgodna wstecznie; powstaje jeden kompletny raport.')
  await validateCatalog()
  const output=resolve(values.output)
  if(output===resolve(values.input))throw new Error('Katalog wynikowy musi różnić się od wejściowego.')
  await mkdir(output,{recursive:true})
- const isBrief=Boolean(values.brief||values['brief-white'])
+ const isBrief=brief||briefWhite
  let generated=0,failed=0,visited=0,skipped=0;const seen=new Set()
  for await(const path of jsonFiles(values.input,output)){
   if(++visited>10000)throw new Error('Przekroczono limit 10000 plików.')
@@ -47,9 +49,9 @@ async function main(){
    const stem=slug(model.metadata.domain)+'--'+date
    const contentId=model.diagnostics.source_digest.slice(0,12)
    const name=stem+'--'+contentId+'--analiza.pdf'
-   const outputName=values['brief-white']?name.slice(0,-4)+'--brief-white.pdf':values.brief?name.slice(0,-4)+'--brief.pdf':name
+   const outputName=briefWhite?name.slice(0,-4)+'--brief-white.pdf':brief?name.slice(0,-4)+'--brief.pdf':name
    const destination=join(output,outputName)
-   const pdf=isBrief?await renderBriefPrepared(model,Boolean(values['brief-white'])):await renderPrepared(model)
+   const pdf=isBrief?await renderBriefPrepared(model,briefWhite):await renderPrepared(model)
    await atomic(destination,pdf)
    const batch = dirname(resolve(path))
    const resultsDir = dirname(batch)
