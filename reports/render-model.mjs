@@ -131,12 +131,25 @@ function priorityDonut(counts) {
   }
 }
 
-function overviewDashboard(model) {
+function dashboardData(model) {
   const priorities = model.policy.priorities
   const priorityCounts = Object.fromEntries(Object.keys(priorities).map(key => [key, 0]))
   for (const finding of model.findings) {
     if (Object.hasOwn(priorityCounts, finding.priority)) priorityCounts[finding.priority] += 1
   }
+  const areas = model.findings
+    .map(group => ({
+      title: model.policy.groups[group.group]?.title || group.title,
+      count: group.variants.length,
+      priority: group.priority,
+    }))
+    .sort((a, b) => b.count - a.count || a.title.localeCompare(b.title, "pl"))
+  const maximum = Math.max(1, ...areas.map(area => area.count))
+  return { priorities, priorityCounts, areas, maximum }
+}
+
+function overviewDashboard(model) {
+  const { priorities, priorityCounts, areas, maximum } = dashboardData(model)
   const priorityContent = [
     { text: "Priorytet weryfikacji", style: "cardTitle" },
     { text: "Liczba obszarów głównych ustaleń", style: "small" },
@@ -163,15 +176,6 @@ function overviewDashboard(model) {
         margin: [0, 0, 0, 4],
       })),
   ]
-
-  const areas = model.findings
-    .map(group => ({
-      title: model.policy.groups[group.group]?.title || group.title,
-      count: group.variants.length,
-      priority: group.priority,
-    }))
-    .sort((a, b) => b.count - a.count || a.title.localeCompare(b.title, "pl"))
-  const maximum = Math.max(1, ...areas.map(area => area.count))
   const areaContent = [
     { text: "Obszary ustaleń", style: "cardTitle" },
     { text: "Liczba odrębnych wariantów", style: "small", margin: [0, 0, 0, 14] },
@@ -566,10 +570,7 @@ function briefCveSection(model) {
       ))
     }
     for (const item of group.items) {
-      const matchStatus = item.match_status_label || "Dopasowanie do weryfikacji"
-      const status = /potencjal/iu.test(matchStatus) && !/weryfikac/iu.test(matchStatus)
-        ? `${matchStatus} — do weryfikacji`
-        : matchStatus
+      const status = briefMatchStatus(item)
       content.push(paragraph(
         `${item.identifier} · ${status} · pewność: ${item.confidence_label || "nieustalona"} · poprawki dostawcy: ${item.backport_status_label || "nieustalone"}`,
         "small"
@@ -612,6 +613,7 @@ function briefObservations(model) {
         order: groupIndex * 100 + variantIndex,
         groupTitle: group.title || "Pozostałe ustalenia",
         title,
+        priority: group.priority,
         observation: variant.observation || "",
         impact: variant.impact || "",
         recommendation: variant.recommendation || "",
@@ -671,6 +673,648 @@ function briefScopeAndContact(model, sectionNumber, forcePageBreak = true) {
     paragraph([brand.email, brand.phone].filter(Boolean).join(" · ")),
   ]
   return [{ stack: contact, unbreakable: true, ...(forcePageBreak ? { pageBreak: "before" } : {}) }]
+}
+
+const PAPER_THEME = {
+  white: "#FFFFFF",
+  graphite: "#223746",
+  steel: "#355F7D",
+  paleBlue: "#EFF5F8",
+  border: "#C8D6DE",
+  muted: "#526A78",
+  urgent: "#A94F32",
+  improve: "#8299A7",
+  info: "#C2CED5",
+}
+const PAPER_PRIORITY_COLORS = {
+  urgent: PAPER_THEME.urgent,
+  review: PAPER_THEME.steel,
+  improve: PAPER_THEME.improve,
+  info: PAPER_THEME.info,
+}
+
+function briefMatchStatus(item) {
+  const label = item.match_status_label || "Dopasowanie do weryfikacji"
+  return /potencjal/iu.test(label) && !/weryfikac/iu.test(label)
+    ? `${label} — do weryfikacji`
+    : label
+}
+
+function paperParagraph(value, style = "paperBody") {
+  return { text: text(value), style, margin: [0, 0, 0, 6] }
+}
+
+function paperPanel(content, borderColor = PAPER_THEME.border, fillColor = PAPER_THEME.paleBlue) {
+  return {
+    table: {
+      widths: ["100%"],
+      body: [[{ stack: content, fillColor, margin: [12, 10, 12, 10] }]],
+    },
+    layout: {
+      hLineWidth: () => 0.65,
+      vLineWidth: () => 0.65,
+      hLineColor: () => borderColor,
+      vLineColor: () => borderColor,
+      paddingLeft: () => 0,
+      paddingRight: () => 0,
+      paddingTop: () => 0,
+      paddingBottom: () => 0,
+    },
+    margin: [0, 0, 0, 9],
+  }
+}
+
+function paperSectionLabel(value) {
+  return {
+    columns: [
+      {
+        canvas: [
+          { type: "rect", x: 0, y: 0, w: 4, h: 14, color: PAPER_THEME.steel },
+          {
+            type: "rect",
+            x: 8,
+            y: 0,
+            w: 12,
+            h: 14,
+            color: PAPER_THEME.paleBlue,
+            lineColor: PAPER_THEME.border,
+            lineWidth: 0.45,
+          },
+          { type: "line", x1: 10, y1: 7, x2: 18, y2: 7, lineColor: PAPER_THEME.steel, lineWidth: 0.8 },
+        ],
+        width: 24,
+      },
+      { text: text(value.toLocaleUpperCase("pl-PL")), style: "paperSection" },
+    ],
+    columnGap: 7,
+    margin: [0, 9, 0, 7],
+  }
+}
+
+function paperShield(color = PAPER_THEME.steel) {
+  return {
+    canvas: [
+      {
+        type: "polyline",
+        points: [
+          { x: 12, y: 0 },
+          { x: 22, y: 4 },
+          { x: 20, y: 16 },
+          { x: 12, y: 25 },
+          { x: 4, y: 16 },
+          { x: 2, y: 4 },
+        ],
+        closePath: true,
+        lineColor: color,
+        lineWidth: 1.35,
+      },
+      {
+        type: "polyline",
+        points: [{ x: 7, y: 12 }, { x: 11, y: 16 }, { x: 17, y: 8 }],
+        lineColor: color,
+        lineWidth: 1.25,
+      },
+    ],
+    width: 26,
+    height: 27,
+  }
+}
+
+function paperPlural(count, forms) {
+  const lastTwo = count % 100
+  const last = count % 10
+  if (count === 1) return forms[0]
+  if (last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14)) return forms[1]
+  return forms[2]
+}
+
+function paperPriorityLegendItem(key, priority, count) {
+  return {
+    columns: [
+      {
+        canvas: [{
+          type: "rect",
+          x: 0,
+          y: 1,
+          w: 8,
+          h: 8,
+          color: PAPER_PRIORITY_COLORS[key] || PAPER_THEME.steel,
+          lineColor: PAPER_THEME.graphite,
+          lineWidth: 0.3,
+        }],
+        width: 12,
+      },
+      { text: priority.label, style: "paperSmall", width: "*" },
+      { text: String(count), style: "paperCount", width: 18, alignment: "right" },
+    ],
+    columnGap: 4,
+    width: "*",
+  }
+}
+
+function paperPriorityContent(data) {
+  const total = data.areas.length
+  const priorities = Object.entries(data.priorities).sort((a, b) => a[1].rank - b[1].rank)
+  const barWidth = 468
+  const bar = [{ type: "rect", x: 0, y: 0, w: barWidth, h: 12, color: "#E3EBEF" }]
+  let x = 0
+  if (total) {
+    const segmentWidth = barWidth / total
+    for (const [key] of priorities) {
+      for (const area of data.areas) {
+        if (area.priority !== key) continue
+        bar.push({
+          type: "rect",
+          x,
+          y: 0,
+          w: segmentWidth,
+          h: 12,
+          color: PAPER_PRIORITY_COLORS[key] || PAPER_THEME.steel,
+          lineColor: PAPER_THEME.white,
+          lineWidth: 0.55,
+        })
+        x += segmentWidth
+      }
+    }
+  }
+  const legend = []
+  for (let index = 0; index < priorities.length; index += 2) {
+    legend.push({
+      columns: priorities.slice(index, index + 2).map(([key, priority]) =>
+        paperPriorityLegendItem(key, priority, data.priorityCounts[key] || 0)
+      ),
+      columnGap: 14,
+      margin: [0, 2, 0, 1],
+    })
+  }
+  return [
+    {
+      columns: [
+        { text: "Priorytety weryfikacji", style: "paperCardTitle" },
+        {
+          text: `${total} ${paperPlural(total, ["obszar", "obszary", "obszarów"])}`,
+          style: "paperCount",
+          alignment: "right",
+        },
+      ],
+      margin: [0, 0, 0, 3],
+    },
+    { text: "Jeden segment odpowiada jednemu obszarowi głównych ustaleń.", style: "paperSmall", margin: [0, 0, 0, 7] },
+    { canvas: bar, margin: [0, 0, 0, 7] },
+    ...legend,
+  ]
+}
+
+function paperAreaPanel(data) {
+  const content = [
+    {
+      columns: [
+        { text: "Obszary ustaleń", style: "paperCardTitle" },
+        { text: "Liczba wariantów w obszarze", style: "paperSmall", alignment: "right" },
+      ],
+      margin: [0, 0, 0, 6],
+    },
+  ]
+  if (!data.areas.length) {
+    content.push({ text: "Brak ustaleń do pogrupowania", style: "paperBodyMuted" })
+    return paperPanel(content)
+  }
+  for (const area of data.areas) {
+    content.push({
+      stack: [
+        {
+          columns: [
+            { text: text(area.title), style: "paperArea", width: "*" },
+            {
+              text: `${area.count} ${paperPlural(area.count, ["wariant", "warianty", "wariantów"])}`,
+              style: "paperCount",
+              alignment: "right",
+              width: 72,
+            },
+          ],
+          columnGap: 8,
+        },
+        {
+          canvas: [
+            { type: "rect", x: 0, y: 0, w: 468, h: 4, color: "#DFE8ED" },
+            {
+              type: "rect",
+              x: 0,
+              y: 0,
+              w: (area.count / data.maximum) * 468,
+              h: 4,
+              color: PAPER_THEME.steel,
+            },
+          ],
+          margin: [0, 2, 0, 5],
+        },
+      ],
+      margin: [0, 0, 0, 1],
+    })
+  }
+  return paperPanel(content)
+}
+
+function lowerFirst(value) {
+  const source = String(value || "")
+  return source ? source[0].toLocaleLowerCase("pl-PL") + source.slice(1) : ""
+}
+
+function paperLeadRecommendation(model) {
+  const first = model.brief_cves?.items?.[0]
+  if (!first) return model.summary.important_rows[0]?.recommendation || model.summary.action
+  return `Sprawdzić wersję ${first.product} ${first.version} i stan poprawek dostawcy; ${lowerFirst(first.recommendation)}`
+}
+
+function paperPriorityIcon(priority) {
+  return paperShield(priority === "urgent" ? PAPER_THEME.urgent : PAPER_THEME.steel)
+}
+
+function paperCveGroupPanel(group) {
+  const confidence = unique(group.items.map(item => item.confidence_label)).join(", ") || "nieustalona"
+  const backports = unique(group.items.map(item => item.backport_status_label)).join(", ") || "nieustalone"
+  const recommendations = new Map()
+  for (const item of group.items) {
+    const recommendation = item.recommendation?.trim()
+    if (!recommendation) continue
+    const identifiers = recommendations.get(recommendation) || []
+    identifiers.push(item.identifier)
+    recommendations.set(recommendation, identifiers)
+  }
+  const content = [
+    {
+      columns: [
+        {
+          stack: [
+            { text: "ROZPOZNANY KOMPONENT", style: "paperOverline" },
+            { text: `${group.product} ${group.version}`, style: "paperComponent" },
+          ],
+          width: "*",
+        },
+        {
+          stack: [
+            { text: "PEWNOŚĆ DOPASOWAŃ", style: "paperOverline", alignment: "right" },
+            { text: confidence, style: "paperMetric", alignment: "right" },
+          ],
+          width: 118,
+        },
+      ],
+      columnGap: 10,
+      margin: [0, 0, 0, 5],
+    },
+    paperParagraph("Zaobserwowana wersja wymaga weryfikacji po stronie administratora.", "paperBodyMuted"),
+    paperParagraph(`Stan poprawek dostawcy: ${backports}`, "paperSmall"),
+    { text: `${group.items.length === 1 ? "Jedno" : group.items.length === 2 ? "Dwa" : "Trzy"} potencjalne dopasowania CVE`, style: "paperCardTitle", margin: [0, 2, 0, 4] },
+  ]
+  for (const item of group.items) {
+    content.push(
+      {
+        columns: [
+          { text: item.identifier, style: "paperCveId", width: 122 },
+          item.vendor_link
+            ? {
+                text: [{ text: "Źródło producenta", link: item.vendor_link }],
+                style: "paperLink",
+                alignment: "right",
+                width: "*",
+              }
+            : { text: "Brak odnośnika producenta w JSON-ie", style: "paperSmall", alignment: "right", width: "*" },
+        ],
+        columnGap: 8,
+        margin: [0, 4, 0, 1],
+      },
+      paperParagraph(item.explanation, "paperBody"),
+      paperParagraph(
+        `${briefMatchStatus(item)} · Pewność: ${item.confidence_label || "nieustalona"} · Poprawki dostawcy: ${item.backport_status_label || "nieustalone"}`,
+        "paperSmall"
+      ),
+      {
+        canvas: [{
+          type: "line",
+          x1: 0,
+          y1: 0,
+          x2: 468,
+          y2: 0,
+          lineWidth: 0.45,
+          lineColor: PAPER_THEME.border,
+        }],
+        margin: [0, 2, 0, 5],
+      }
+    )
+  }
+  if (recommendations.size) {
+    content.push({ text: "WSPÓLNE ZALECENIE", style: "paperOverline", margin: [0, 4, 0, 3] })
+    for (const [recommendation, identifiers] of recommendations) {
+      content.push(paperParagraph(
+        `${recommendations.size > 1 ? `${identifiers.join(", ")}: ` : ""}${recommendation}`,
+        "paperRecommendation"
+      ))
+    }
+  }
+  return { unbreakable: true, stack: [paperPanel(content)] }
+}
+
+function paperCveSection(model, groups) {
+  if (!groups.length) return []
+  const firstGroup = paperCveGroupPanel(groups[0])
+  const note = model.brief_cves?.note
+    ? [paperPanel([paperParagraph(model.brief_cves.note, "paperBodyMuted")], PAPER_THEME.border, PAPER_THEME.white)]
+    : []
+  return [
+    {
+      stack: [
+        paperSectionLabel("USTALENIA PRIORYTETOWE"),
+        { text: groups.length === 1 ? `Środowisko ${groups[0].product}` : "Komponenty do sprawdzenia", style: "paperPageTitle", headlineLevel: 2 },
+        ...note,
+        firstGroup,
+      ],
+      unbreakable: true,
+      pageBreak: "before",
+    },
+    ...groups.slice(1).map(paperCveGroupPanel),
+  ]
+}
+
+function paperObservationCard(item) {
+  const content = [
+    {
+      columns: [
+        paperPriorityIcon(item.priority),
+        {
+          stack: [
+            { text: item.groupTitle, style: "paperSmall" },
+            { text: item.title, style: "paperCardTitle" },
+          ],
+          width: "*",
+        },
+      ],
+      columnGap: 8,
+      margin: [0, 0, 0, 5],
+    },
+    { text: "ZAOBSERWOWANO", style: "paperOverline", margin: [0, 1, 0, 3] },
+    ...(item.observation ? [paperParagraph(item.observation)] : []),
+    ...(item.recommendation
+      ? [
+          { text: "DO SPRAWDZENIA", style: "paperOverline", margin: [0, 1, 0, 3] },
+          paperParagraph(item.recommendation, "paperRecommendation"),
+        ]
+      : []),
+  ]
+  return { unbreakable: true, stack: [paperPanel(content)] }
+}
+
+function paperObservationSection(observations) {
+  if (!observations.items.length) return []
+  const firstCard = paperObservationCard(observations.items[0])
+  const intro = `${observations.items.length} ${paperPlural(observations.items.length, ["obserwacja", "obserwacje", "obserwacji"])} z tego skanu; poniżej wskazano, co administrator może sprawdzić.`
+  const nodes = [
+    {
+      stack: [
+        paperSectionLabel("POZOSTAŁE OBSERWACJE"),
+        { text: "Pozostałe ustalenia", style: "paperPageTitle", headlineLevel: 2 },
+        paperParagraph(intro, "paperBodyMuted"),
+        firstCard,
+      ],
+      unbreakable: true,
+    },
+    ...observations.items.slice(1).map(paperObservationCard),
+  ]
+  if (observations.omittedAreas.length) {
+    nodes.push(paperParagraph(
+      `Pełny przegląd obejmuje również uwagi w obszarach: ${observations.omittedAreas.join(", ")}.`,
+      "paperSmall"
+    ))
+  }
+  return nodes
+}
+
+function paperScopePage(model, date) {
+  const brand = model.copy.brand
+  const company = brand.legal_name || "Codefellow Sp. z o.o."
+  const email = brand.email
+    ? { text: [{ text: brand.email, link: `mailto:${brand.email}` }], style: "paperContact" }
+    : paperParagraph("Brak adresu e-mail w konfiguracji.", "paperSmall")
+  const phone = brand.phone
+    ? { text: brand.phone, style: "paperContact" }
+    : paperParagraph("Brak numeru telefonu w konfiguracji.", "paperSmall")
+  return [{
+    stack: [
+      paperSectionLabel("CODEFELLOW SCOUT"),
+      { text: "Zakres i kontakt", style: "paperPageTitle", headlineLevel: 2 },
+      { text: date ? `Analiza z ${date} r.` : "Data analizy: brak w zapisie.", style: "paperSubtitle" },
+      paperPanel([
+        { text: "ZAKRES ANALIZY", style: "paperOverline" },
+        paperParagraph(`Raport obejmuje wybrane obserwacje z pasywnej analizy publicznie dostępnej strony ${model.metadata.domain}. Wnioski opierają się na informacjach przekazywanych przez serwis.`),
+      ]),
+      paperPanel([
+        { text: "JAK INTERPRETOWAĆ WYNIKI", style: "paperOverline" },
+        paperParagraph("Dokument ma charakter informacyjny i nie stanowi pełnego audytu bezpieczeństwa. Dopasowania CVE wymagają potwierdzenia wersji pakietów, stanu poprawek i warunków występowania podatności."),
+        paperParagraph(`Raport przygotowała firma ${company} przy użyciu narzędzia Codefellow Scout.`, "paperBodyMuted"),
+      ], PAPER_THEME.border, PAPER_THEME.white),
+      paperSectionLabel("KONTAKT W SPRAWIE RAPORTU"),
+      { text: company, style: "paperCompany" },
+      {
+        columns: [
+          { stack: [{ text: "E-MAIL", style: "paperOverline" }, email], width: "*" },
+          { stack: [{ text: "TELEFON", style: "paperOverline" }, phone], width: 175 },
+        ],
+        columnGap: 12,
+        margin: [0, 3, 0, 0],
+      },
+    ],
+    pageBreak: "before",
+    unbreakable: true,
+  }]
+}
+
+function paperBackground(_page, size) {
+  const dots = []
+  for (let row = 0; row < 3; row += 1) {
+    for (let column = 0; column < 4; column += 1) {
+      dots.push({
+        type: "ellipse",
+        x: size.width - 59 + column * 7,
+        y: 45 + row * 7,
+        r1: 1,
+        r2: 1,
+        color: "#C7D7DF",
+      })
+    }
+  }
+  return {
+    canvas: [
+      { type: "rect", x: 0, y: 0, w: size.width, h: size.height, color: PAPER_THEME.white },
+      { type: "rect", x: 0, y: 0, w: size.width, h: 5, color: PAPER_THEME.steel },
+      { type: "rect", x: 0, y: 5, w: size.width * 0.3, h: 2, color: PAPER_THEME.paleBlue },
+      {
+        type: "ellipse",
+        x: size.width - 40,
+        y: 37,
+        r1: 53,
+        r2: 25,
+        color: PAPER_THEME.white,
+        fillOpacity: 0,
+        lineColor: "#D9E4E9",
+        lineWidth: 0.6,
+      },
+      {
+        type: "ellipse",
+        x: size.width - 40,
+        y: 37,
+        r1: 38,
+        r2: 17,
+        color: PAPER_THEME.white,
+        fillOpacity: 0,
+        lineColor: "#E2EAEE",
+        lineWidth: 0.5,
+      },
+      ...dots,
+    ],
+  }
+}
+
+function paperHeader(domain) {
+  return {
+    columns: [
+      paperShield(),
+      { text: "Codefellow Scout", style: "paperHeaderBrand", width: 145 },
+      { text: text(domain), style: "paperHeaderDomain", alignment: "right", width: "*" },
+    ],
+    columnGap: 7,
+    margin: [44, 23, 44, 0],
+  }
+}
+
+function paperFooter(domain, currentPage, pageCount) {
+  return {
+    stack: [
+      {
+        canvas: [{
+          type: "line",
+          x1: 0,
+          y1: 0,
+          x2: 507,
+          y2: 0,
+          lineWidth: 0.55,
+          lineColor: PAPER_THEME.border,
+        }],
+      },
+      {
+        columns: [
+          { text: text(`Codefellow Scout / ${domain}`), style: "paperFooter", width: "*" },
+          {
+            text: `${String(currentPage).padStart(2, "0")} / ${String(pageCount).padStart(2, "0")}`,
+            style: "paperFooter",
+            alignment: "right",
+            width: 56,
+          },
+        ],
+        margin: [0, 7, 0, 0],
+      },
+    ],
+    margin: [44, 11, 44, 0],
+  }
+}
+
+function briefWhiteDocumentDefinition(model) {
+  const metadata = model.metadata
+  const copy = model.copy.report
+  const date = metadata.scanned_at
+    ? new Intl.DateTimeFormat("pl-PL", {
+        dateStyle: "long",
+        timeZone: metadata.timezone,
+      }).format(new Date(metadata.scanned_at))
+    : null
+  const data = dashboardData(model)
+  const cveGroups = briefCveGroups(model)
+  const observations = briefObservations(model)
+  const urgent = model.findings.some(finding => finding.priority === "urgent")
+  const nodes = [
+    {
+      columns: [
+        {
+          stack: [
+            { text: "ANALIZA PASYWNA", style: "paperEyebrow" },
+            { text: copy.title, style: "paperTitle" },
+            { text: text(metadata.domain), style: "paperDomain" },
+          ],
+          width: "*",
+        },
+        {
+          stack: [
+            { text: "DATA ANALIZY", style: "paperOverline", alignment: "right" },
+            { text: date || "Brak daty", style: "paperDate", alignment: "right" },
+          ],
+          width: 118,
+        },
+      ],
+      columnGap: 12,
+      margin: [0, 0, 0, 6],
+    },
+    paperPanel([
+      { text: "PODSUMOWANIE ANALIZY", style: "paperOverline", margin: [0, 0, 0, 4] },
+      paperParagraph(model.summary.text, "paperBodyMuted"),
+    ], PAPER_THEME.border, PAPER_THEME.white),
+    paperSectionLabel("ROZKŁAD PRIORYTETÓW"),
+    paperPanel(paperPriorityContent(data)),
+    paperSectionLabel("OBSZARY USTALEŃ"),
+    paperAreaPanel(data),
+    paperPanel([
+      { text: "W PIERWSZEJ KOLEJNOŚCI", style: "paperCardTitle", color: urgent ? PAPER_THEME.urgent : PAPER_THEME.steel },
+      paperParagraph(paperLeadRecommendation(model), "paperRecommendation"),
+    ], urgent ? PAPER_THEME.urgent : PAPER_THEME.steel, PAPER_THEME.paleBlue),
+  ]
+  nodes.push(
+    ...paperCveSection(model, cveGroups),
+    ...paperObservationSection(observations),
+    ...paperScopePage(model, date)
+  )
+  return {
+    pageSize: "A4",
+    pageMargins: [44, 82, 44, 56],
+    info: {
+      title: `${copy.title} — ${metadata.domain}`,
+      author: "Codefellow Sp. z o.o.",
+      subject: "Skrócona analiza zapisanych obserwacji pasywnych",
+    },
+    defaultStyle: {
+      font: "Roboto",
+      color: PAPER_THEME.graphite,
+      fontSize: 9.3,
+      lineHeight: 1.2,
+    },
+    background: paperBackground,
+    header: () => paperHeader(metadata.domain),
+    footer: (currentPage, pageCount) => paperFooter(metadata.domain, currentPage, pageCount),
+    styles: {
+      paperHeaderBrand: { fontSize: 14, bold: true, color: PAPER_THEME.graphite, margin: [0, 4, 0, 0] },
+      paperHeaderDomain: { fontSize: 7.2, color: PAPER_THEME.muted, margin: [0, 8, 0, 0] },
+      paperFooter: { fontSize: 6.8, color: PAPER_THEME.muted },
+      paperEyebrow: { fontSize: 8, bold: true, characterSpacing: 1.1, color: PAPER_THEME.steel, margin: [0, 0, 0, 4] },
+      paperTitle: { fontSize: 22, bold: true, color: PAPER_THEME.graphite, lineHeight: 1.08, margin: [0, 0, 0, 4] },
+      paperDomain: { fontSize: 14, bold: true, color: PAPER_THEME.steel, margin: [0, 0, 0, 5] },
+      paperDate: { fontSize: 8.5, bold: true, color: PAPER_THEME.graphite, margin: [0, 3, 0, 0] },
+      paperOverline: { fontSize: 7, bold: true, characterSpacing: 0.55, color: PAPER_THEME.steel },
+      paperSection: { fontSize: 8, bold: true, characterSpacing: 0.7, color: PAPER_THEME.steel, margin: [0, 1, 0, 0] },
+      paperPageTitle: { fontSize: 19, bold: true, color: PAPER_THEME.graphite, margin: [0, 3, 0, 8] },
+      paperCardTitle: { fontSize: 10.3, bold: true, color: PAPER_THEME.graphite, margin: [0, 0, 0, 3] },
+      paperArea: { fontSize: 8.4, color: PAPER_THEME.graphite },
+      paperCount: { fontSize: 8, bold: true, color: PAPER_THEME.graphite },
+      paperSmall: { fontSize: 7.6, color: PAPER_THEME.muted, lineHeight: 1.15 },
+      paperBody: { fontSize: 9, color: PAPER_THEME.graphite, lineHeight: 1.2 },
+      paperBodyMuted: { fontSize: 8.7, color: PAPER_THEME.muted, lineHeight: 1.2 },
+      paperComponent: { fontSize: 15, bold: true, color: PAPER_THEME.graphite, margin: [0, 2, 0, 0] },
+      paperMetric: { fontSize: 9, bold: true, color: PAPER_THEME.steel, margin: [0, 2, 0, 0] },
+      paperCveId: { fontSize: 9, bold: true, color: PAPER_THEME.graphite },
+      paperLink: { fontSize: 8.2, color: PAPER_THEME.steel, decoration: "underline" },
+      paperRecommendation: { fontSize: 9, bold: true, color: PAPER_THEME.graphite, lineHeight: 1.2 },
+      paperSubtitle: { fontSize: 9, bold: true, color: PAPER_THEME.steel, margin: [0, 0, 0, 11] },
+      paperCompany: { fontSize: 12, bold: true, color: PAPER_THEME.graphite, margin: [0, 0, 0, 9] },
+      paperContact: { fontSize: 9, bold: true, color: PAPER_THEME.steel, margin: [0, 3, 0, 0] },
+    },
+    pageBreakBefore: (node, following) => node.headlineLevel === 2 && following.length === 0,
+    content: nodes,
+  }
 }
 
 export function documentDefinition(model) {
@@ -922,6 +1566,8 @@ export async function renderModel(model) {
   return renderDefinition(documentDefinition(model))
 }
 
-export async function renderBriefModel(model) {
-  return renderDefinition(briefDocumentDefinition(model))
+export async function renderBriefModel(model, white = false) {
+  return renderDefinition(
+    white ? briefWhiteDocumentDefinition(model) : briefDocumentDefinition(model)
+  )
 }

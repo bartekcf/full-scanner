@@ -136,36 +136,43 @@ Pętla, brak nagłówka Location lub odrzucony adres kończą zadanie błędem.
 
 ## Raporty PDF z zapisanych skanów
 
-Generator raportów Stronoskop w `reports/` korzysta z pdfmake 0.2.20.
+Generator raportów PDF w `reports/` korzysta z pdfmake 0.2.20.
 Wymaga Node.js 22.18 lub nowszego. Uruchom go z katalogu local-scanner:
 
 ```sh
 npm --prefix reports ci
 node reports/generate.mjs --input ./output/batch-ID --output ./output/pdf
 node reports/generate.mjs --input ./output/batch-ID --output ./output/pdf --brief
+node reports/generate.mjs --input ./output/batch-ID --output ./output/pdf --brief-white
 ```
-Opcja `--brief` tworzy wyłącznie osobny plik `--brief.pdf`; nie generuje ani nie nadpisuje pełnego PDF-a.
-Jeśli selekcja nie pozostawi kwalifikującego się CVE, generator pomija cały skan i zapisuje informację w logu.
-Wariant korzysta tylko z zapisanego JSON-u i lokalnych danych; działa offline. Raport obejmuje maksymalnie 3 CVE i 4 dodatkowe obserwacje, a jego część ustaleń zajmuje najwyżej 2 strony.
+Opcja `--brief` tworzy wyłącznie ciemny skrót z końcówką `--brief.pdf`.
+Opcja `--brief-white` tworzy wyłącznie jasny skrót z końcówką `--brief-white.pdf`.
+Pełny raport, ciemny skrót i jasny skrót mogą współistnieć jako osobne pliki.
+Oba skróty korzystają z tego samego modelu CVE i obserwacji. Jeśli selekcja nie
+pozostawi kwalifikującego się CVE, generator pomija cały skan i zapisuje informację
+w logu. Warianty skrócone korzystają tylko z zapisanego JSON-u i lokalnych danych;
+działają offline. Raport obejmuje maksymalnie 3 CVE i 4 dodatkowe obserwacje, a jego
+część ustaleń zajmuje najwyżej 2 strony.
 
 Możesz wskazać całe ./output. Generator odwiedza podkatalogi i pomija manifesty,
 nieukończone skany oraz powtórzone identyfikatory skanów w jednym uruchomieniu.
-Opcja --version full pozostaje obsługiwana dla zgodności. Oba warianty automatycznie
-dobierają szczegółowość i limit stron. PDF interpretuje alerty ZAP zapisane w findings
-i przedstawia kompletność danych dodatkowych. Nazwa pliku zawiera skrót
-zawartości skanu: ponowne generowanie tych samych danych zastępuje ten sam PDF,
-a zmienione dane tworzą nowy plik. Katalog wynikowy zawiera wyłącznie PDF-y;
-ostrzeżenia i błędy generatora są wypisywane w konsoli.
+Opcja `--version full` pozostaje obsługiwana dla zgodności. Domyślnie generator
+tworzy pełny raport; `--brief` i `--brief-white` wybierają osobne warianty skrócone.
+PDF interpretuje alerty ZAP zapisane w findings i przedstawia kompletność danych
+dodatkowych. Nazwa pliku zawiera skrót zawartości skanu: ponowne generowanie tych
+samych danych zastępuje ten sam wariant PDF, a zmienione dane tworzą nowy plik.
+Katalog wynikowy zawiera wyłącznie PDF-y; ostrzeżenia i błędy generatora są
+wypisywane w konsoli.
 Po zapisaniu PDF generator rejestruje ścieżkę w bazie skanów. Jeśli katalog PDF
 znajduje się poza `output`, wskaż katalog z bazą opcją `--database-dir ./output`.
 
 ### Treść i układ raportów
 
-Generator zachowuje dotychczasowy układ i oprawę wizualną:
-ciemne tło, identyfikację marki, karty podsumowania, priorytety, część
-szczegółową i numerację stron. Treści ustaleń, zaleceń, zakresu i ograniczeń
-pochodzą z katalogu `knowledge/`; jeden plik PDF łączy je z tym układem.
-
+Pełny raport zachowuje dotychczasowy ciemny układ i oprawę wizualną: identyfikację
+marki, karty podsumowania, priorytety, część szczegółową i numerację stron.
+`--brief` używa ciemnej oprawy skrótu, a `--brief-white` — osobnego jasnego układu
+z wykresami i ikonami wektorowymi. Treści ustaleń, zaleceń, zakresu i ograniczeń
+pochodzą z katalogu `knowledge/`; raport łączy je z danymi wybranego skanu.
 Raport zawiera podsumowanie, wszystkie główne ustalenia z numerami U-01…,
 obserwacje techniczne, kandydatów CVE, zakres kontroli i ograniczenia.
 Na ostatniej stronie sekcja „Strona i kontakt” podaje e-mail i telefon w razie

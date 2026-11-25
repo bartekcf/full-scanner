@@ -23,7 +23,9 @@ async function prepare(scan, args) {
 export async function prepareModel(scan){return prepare(scan,[])}
 export async function prepareBriefModel(scan){return prepare(scan,['--brief'])}
 export async function renderPrepared(model){return child(process.execPath,['--max-old-space-size=384','render-worker.mjs'],JSON.stringify(model),32*1024*1024)}
-export async function renderBriefPrepared(model){return child(process.execPath,['--max-old-space-size=384','render-worker.mjs','--brief'],JSON.stringify(model),32*1024*1024)}
+export async function renderBriefPrepared(model, white=false){
+ return child(process.execPath,['--max-old-space-size=384','render-worker.mjs',white?'--brief-white':'--brief'],JSON.stringify(model),32*1024*1024)
+}
 
 export async function registerReport(output, scanId, pdf) {
  const project = fileURLToPath(new URL('..', import.meta.url))
