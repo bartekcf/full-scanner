@@ -1,6 +1,6 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {mkdtemp,writeFile,rm,readdir} from 'node:fs/promises'
+import {mkdtemp,writeFile,readFile,rm,readdir} from 'node:fs/promises'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {execFile} from 'node:child_process'
@@ -43,22 +43,30 @@ test('Brief PDF keeps the summary, qualified CVE, company contact and short pagi
  const briefText=await pdfText(await renderBriefPrepared(model))
  const pages=briefText.split('\f').filter(page=>page.trim())
  const normalized=briefText.replace(/\s+/gu,' ')
- assert.ok(pages.length<=3)
+ assert.equal(pages.length,3)
  assert.ok(pages.every(page=>page.trim().length>100))
  assert.match(normalized,/Raport przygotowany przez Codefellow Sp\. z o\.o\. przy użyciu narzędzia Codefellow Scout/)
  assert.match(normalized,/Liczba obszarów głównych ustaleń/)
- assert.match(normalized,/CVE-2025-4242.*PHP 8\.2\.4/)
+ assert.match(normalized,/PHP · zaobserwowana wersja 8\.2\.4/)
+ for(const id of ['CVE-2025-4242','CVE-2025-4243','CVE-2025-4244'])assert.match(normalized,new RegExp(id))
+ assert.equal((briefText.match(/Zalecenie:/gu)||[]).length,1)
  assert.match(normalized,/Potencjalne dopasowanie.*do weryfikacji/)
- assert.match(normalized,/Informacja producenta/)
+ assert.match(normalized,/Informacja producenta — CVE-2025-4242/)
  assert.match(normalized,/kontakt@codefellow\.pl/)
  assert.match(normalized,/\+48 795 309 804/)
- assert.match(normalized,/Raport przedstawia najważniejsze obserwacje z pasywnej analizy/)
+ assert.match(normalized,/Dokument przedstawia wybrane, najważniejsze obserwacje z pasywnej analizy/)
  assert.match(normalized,/Codefellow Sp\. z o\.o\./)
  assert.doesNotMatch(briefText,/Stronoskop|Nagłówki HTTP|Lista narzędzi|Pozostałe obserwacje/)
- const cvePage=pages.find(page=>page.includes('Najważniejsze CVE'))
+ const cvePage=pages.find(page=>page.includes('Co sprawdzić w pierwszej kolejności'))
  assert.ok(cvePage)
  assert.match(cvePage,/CVE-2025-4242/)
- assert.match(normalized,/Zakres i kontakt/)
+ const contactPage=pages.at(-1)
+ const requiredScope='Raport przygotowała firma Codefellow Sp. z o.o. przy użyciu narzędzia Codefellow Scout. Dokument przedstawia wybrane, najważniejsze obserwacje z pasywnej analizy publicznie dostępnej strony. Ma charakter informacyjny i nie stanowi pełnego audytu bezpieczeństwa. Wskazane dopasowania CVE wymagają weryfikacji przez administratora serwisu. W razie pytań dotyczących przedstawionych ustaleń prosimy o kontakt.'
+ assert.ok(contactPage.replace(/\s+/gu,' ').includes(requiredScope))
+ assert.match(contactPage,/Zakres i kontakt/)
+ assert.match(contactPage,/kontakt@codefellow\.pl/)
+ assert.match(contactPage,/\+48 795 309 804/)
+ assert.doesNotMatch(pages.slice(0,-1).join(' '),/kontakt@codefellow\.pl|\+48 795 309 804/)
  assert.equal(briefDocumentDefinition(model).info.author,'Codefellow Sp. z o.o.')
  assert.equal(documentDefinition(model).info.author,'Stronoskop')
  const fullText=await pdfText(await renderPrepared(await prepareModel(scan)))
@@ -66,13 +74,9 @@ test('Brief PDF keeps the summary, qualified CVE, company contact and short pagi
  assert.doesNotMatch(fullText,/Codefellow Scout/)
 })
 
-test('Brief omits the CVE section when no reliable match exists',async()=>{
+test('Brief selection yields no CVEs when there is no reliable match',async()=>{
  const model=await prepareBriefModel({...base,cves:[]})
- const briefText=await pdfText(await renderBriefPrepared(model))
- const pages=briefText.split('\f').filter(page=>page.trim())
- assert.ok(pages.length<=2)
- assert.doesNotMatch(briefText,/Najważniejsze CVE|02 \/ NAJWAŻNIEJSZE CVE/)
- assert.match(briefText,/Zakres i kontakt/)
+ assert.equal(model.brief_cves.items.length,0)
 })
 
 test('Summary heading and findings table stay together on page',async()=>{
@@ -132,7 +136,7 @@ test('Long evidence and many variants wrap without dropping significant findings
  assert.doesNotMatch(txt,/SECRET/)
 })
 
-test('CLI produces one document per scan, protects same-domain/date collisions, supports old --version',async()=>{
+test('CLI preserves full output and brief skips scans without selected CVEs',async()=>{
  const dir=await mkdtemp(join(tmpdir(),'report-cli-'));try{
   const input=join(dir,'input'),output=join(dir,'output');await (await import('node:fs/promises')).mkdir(input)
   await writeFile(join(input,'a.json'),JSON.stringify(base))
@@ -141,10 +145,40 @@ test('CLI produces one document per scan, protects same-domain/date collisions, 
   assert.equal((await readdir(output)).filter(f=>f.endsWith('.pdf')).length,2)
   await exec(process.execPath,['generate.mjs','--input',input,'--output',output],{cwd:root})
   assert.equal((await readdir(output)).filter(f=>f.endsWith('.pdf')).length,2)
-  const {stdout}=await exec(process.execPath,['generate.mjs','--input',input,'--output',output,'--brief'],{cwd:root})
-  assert.match(stdout,/CVE: 0 \(brak wiarygodnych dopasowań\)/)
-  const files=(await readdir(output)).filter(f=>f.endsWith('.pdf'))
-  assert.equal(files.filter(f=>f.endsWith('--analiza.pdf')).length,2)
-  assert.equal(files.filter(f=>f.endsWith('--analiza--brief.pdf')).length,2)
+
+  const briefInput=join(dir,'brief-input'),briefOutput=join(dir,'brief-output')
+  await (await import('node:fs/promises')).mkdir(briefInput)
+  const cve={cve_id:'CVE-2025-4242',product:'PHP',technology_name:'PHP',detected_version:'8.2.4',
+   match_status:'potentially_affected',confidence:'medium',backport_status:'unknown',sources:['NVD'],
+   affected_range:'cpe:2.3:a:php:php:*:*:*:*:*:*:*:*',description:'The parse_str function can overwrite arbitrary variables.',
+   vendor_advisories:['https://bugs.php.net/bug.php?id=68665'],cvss_score:7.5}
+  const technology={name:'PHP',version:'8.2.4',version_status:'declared',sources:['http_headers'],
+   version_conflict:false,cpe:'cpe:2.3:a:php:php:8.2.4:*:*:*:*:*:*:*'}
+  const csp={pluginId:'10038',alertRef:'10038-1',name:'Content Security Policy (CSP) Header Not Set',
+   risk:'Medium',confidence:'Low',url:'https://no-cve.example.org/',evidence:''}
+  const noCve={...base,scan_id:'no-cve',url:'https://no-cve.example.org/',final_url:'https://no-cve.example.org/',
+   raw_zap:{alerts:[csp]}}
+  const rejected={...base,scan_id:'rejected',url:'https://rejected.example.org/',final_url:'https://rejected.example.org/',
+   technologies:[technology],cves:[{...cve,match_status:'not_affected'}],raw_zap:{alerts:[csp]}}
+  const qualified={...base,scan_id:'qualified',url:'https://qualified.example.org/',final_url:'https://qualified.example.org/',
+   technologies:[technology],cves:[cve],raw_zap:{alerts:[{...csp,url:'https://qualified.example.org/'}]}}
+  await writeFile(join(briefInput,'a-no-cve.json'),JSON.stringify(noCve))
+  await writeFile(join(briefInput,'b-rejected.json'),JSON.stringify(rejected))
+  await writeFile(join(briefInput,'c-qualified.json'),JSON.stringify(qualified))
+  const {stdout}=await exec(process.execPath,['generate.mjs','--input',briefInput,'--output',briefOutput,'--brief'],{cwd:root})
+  assert.match(stdout,/no-cve\.example\.org — pominięto: brak kwalifikujących się CVE/)
+  assert.match(stdout,/rejected\.example\.org — pominięto: brak kwalifikujących się CVE/)
+  assert.match(stdout,/Zapisane raporty: 1\. Pominięte: 2\. Błędy: 0\./)
+  const files=(await readdir(briefOutput)).filter(f=>f.endsWith('.pdf'))
+  assert.equal(files.length,1)
+  assert.match(files[0],/--brief\.pdf$/)
+  assert.ok(files.every(file=>file.endsWith('--brief.pdf')))
+  const text=await pdfText(await readFile(join(briefOutput,files[0])))
+  const pages=text.split('\f').filter(page=>page.trim())
+  assert.equal(pages.length,3)
+  assert.match(pages[1],/Polityka bezpieczeństwa treści \(CSP\)/)
+  assert.match(pages.at(-1),/Zakres i kontakt/)
+  assert.match(pages.at(-1),/kontakt@codefellow\.pl/)
+  assert.match(pages.at(-1),/\+48 795 309 804/)
  }finally{await rm(dir,{recursive:true,force:true})}
 })

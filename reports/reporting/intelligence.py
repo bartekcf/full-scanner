@@ -1,0 +1,1 @@
+            'cvss_score': score, 'cvss_version': cvss_version, 'severity': severity}

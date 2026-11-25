@@ -144,9 +144,9 @@ npm --prefix reports ci
 node reports/generate.mjs --input ./output/batch-ID --output ./output/pdf
 node reports/generate.mjs --input ./output/batch-ID --output ./output/pdf --brief
 ```
-Opcja `--brief` generuje obok pełnego raportu osobny plik `--brief.pdf`.
-Wariant korzysta wyłącznie z zapisanego JSON-u i lokalnych danych; nie wymaga połączenia z siecią.
-W skrócie raport wybiera najwyżej 3 CVE; gdy brak wiarygodnych dopasowań, pomija tę sekcję, a log podaje zero.
+Opcja `--brief` tworzy wyłącznie osobny plik `--brief.pdf`; nie generuje ani nie nadpisuje pełnego PDF-a.
+Jeśli selekcja nie pozostawi kwalifikującego się CVE, generator pomija cały skan i zapisuje informację w logu.
+Wariant korzysta tylko z zapisanego JSON-u i lokalnych danych; działa offline. Raport obejmuje maksymalnie 3 CVE i 4 dodatkowe obserwacje, a jego część ustaleń zajmuje najwyżej 2 strony.
 
 Możesz wskazać całe ./output. Generator odwiedza podkatalogi i pomija manifesty,
 nieukończone skany oraz powtórzone identyfikatory skanów w jednym uruchomieniu.

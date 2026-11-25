@@ -25,7 +25,7 @@ async function main(){
  const output=resolve(values.output)
  if(output===resolve(values.input))throw new Error('Katalog wynikowy musi różnić się od wejściowego.')
  await mkdir(output,{recursive:true})
- let generated=0,failed=0,visited=0;const seen=new Set()
+ let generated=0,failed=0,visited=0,skipped=0;const seen=new Set()
  for await(const path of jsonFiles(values.input,output)){
   if(++visited>10000)throw new Error('Przekroczono limit 10000 plików.')
   let sourceId=createHash('sha256').update(path).digest('hex').slice(0,16)
@@ -35,20 +35,20 @@ async function main(){
    if(!scan||!['completed','failed'].includes(scan.status)||!scan.scan_id)continue
    if(seen.has(scan.scan_id))continue
    const model=values.brief?await prepareBriefModel(scan):await prepareModel(scan);sourceId=model.metadata.report_id
+   const cveCount=Array.isArray(model.brief_cves?.items)?model.brief_cves.items.length:0
+   if(values.brief&&!cveCount){
+    console.log(`${model.metadata.domain} — pominięto: brak kwalifikujących się CVE`)
+    skipped++;seen.add(scan.scan_id)
+    continue
+   }
    const date=model.metadata.scanned_at?.slice(0,10)||'brak-daty'
    const stem=slug(model.metadata.domain)+'--'+date
    const contentId=model.diagnostics.source_digest.slice(0,12)
    const name=stem+'--'+contentId+'--analiza.pdf'
-   const destination=join(output,name)
-   const pdf=await renderPrepared(model)
+   const outputName=values.brief?name.slice(0,-4)+'--brief.pdf':name
+   const destination=join(output,outputName)
+   const pdf=values.brief?await renderBriefPrepared(model):await renderPrepared(model)
    await atomic(destination,pdf)
-   const names=[name]
-   if(values.brief){
-    const briefName=name.slice(0,-4)+'--brief.pdf'
-    const briefPdf=await renderBriefPrepared(model)
-    await atomic(join(output,briefName),briefPdf)
-    names.push(briefName)
-   }
    const batch = dirname(resolve(path))
    const resultsDir = dirname(batch)
    let databaseDir = values['database-dir'] && resolve(values['database-dir'])
@@ -60,12 +60,12 @@ async function main(){
    }
    if (databaseDir) await registerReport(databaseDir, scan.scan_id, destination)
    for(const warning of model.diagnostics.warnings)console.error(sourceId+': '+warning)
-   const cveCount=values.brief?model.brief_cves.items.length:0
-   const cveStatus=values.brief?(cveCount===0?'; CVE: 0 (brak wiarygodnych dopasowań)':`; CVE: ${cveCount} wybranych`):''
-   console.log(`[${++generated}] ${names.join(' + ')}${cveStatus}`);seen.add(scan.scan_id)
+   const cveStatus=values.brief?`; CVE: ${cveCount} wybranych`:''
+   console.log(`[${++generated}] ${outputName}${cveStatus}`);seen.add(scan.scan_id)
   }catch(error){failed++;console.error(sourceId+': '+(error instanceof SyntaxError?'Nieprawidłowy JSON.':error.message))}
  }
- console.log(`Zapisane raporty: ${generated}. Błędy: ${failed}.`)
- if(failed||!generated)process.exitCode=1
+ if(values.brief)console.log(`Zapisane raporty: ${generated}. Pominięte: ${skipped}. Błędy: ${failed}.`)
+ else console.log(`Zapisane raporty: ${generated}. Błędy: ${failed}.`)
+ if(failed||(!generated&&!skipped))process.exitCode=1
 }
 main().catch(error=>{console.error(error.message);process.exitCode=1})

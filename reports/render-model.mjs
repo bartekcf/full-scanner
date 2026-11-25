@@ -508,75 +508,170 @@ function actionAndScope(model, firstSectionNumber) {
   nodes.push({ stack: contact, unbreakable: true })
   return nodes
 }
-function briefCveSection(model) {
-  const brief = model.brief_cves
-  const items = Array.isArray(brief?.items) ? brief.items.slice(0, 3) : []
-  if (!items.length) return []
-  const nodes = [
-    { ...sectionLabel("02 / NAJWAŻNIEJSZE CVE"), pageBreak: "before" },
-    { text: "Najważniejsze CVE", style: "pageTitle", headlineLevel: 2 },
-    ...(brief.note ? [paragraph(brief.note, "bodyMuted")] : []),
-  ]
+function briefCveGroups(model) {
+  const groups = new Map()
+  const items = Array.isArray(model.brief_cves?.items) ? model.brief_cves.items.slice(0, 3) : []
   for (const item of items) {
+    const product = item.product || item.technology_name || "Komponent"
+    const version = item.version || item.detected_version || "nieustalona"
+    const key = `${product.toLocaleLowerCase("pl-PL")}\u0000${version}`
+    if (!groups.has(key)) groups.set(key, { product, version, items: [] })
+    groups.get(key).items.push(item)
+  }
+  return [...groups.values()]
+}
+
+function briefCveSection(model) {
+  const groups = briefCveGroups(model)
+  if (!groups.length) return []
+  const nodes = [
+    { ...sectionLabel("02 / CO SPRAWDZIĆ W PIERWSZEJ KOLEJNOŚCI"), pageBreak: "before" },
+    { text: "Co sprawdzić w pierwszej kolejności", style: "pageTitle", headlineLevel: 2 },
+    ...(model.brief_cves.note ? [paragraph(model.brief_cves.note, "bodyMuted")] : []),
+  ]
+  for (const group of groups) {
     const content = [
-      { text: `${item.identifier} · ${item.product} ${item.version}`, style: "cardTitle", color: THEME.cyan },
-      paragraph(
-        `${item.match_status_label} — do weryfikacji · Pewność: ${item.confidence_label} · Poprawki dostawcy: ${item.backport_status_label}`,
-        "small"
-      ),
-      paragraph(item.explanation),
-      paragraph(`Zalecenie: ${item.recommendation}`, "bodyMuted"),
-      ...(item.vendor_link
-        ? [{
-            text: [{ text: "Informacja producenta", link: item.vendor_link, color: THEME.cyan, decoration: "underline" }],
-            fontSize: 8.5,
-            margin: [0, 0, 0, 7],
-          }]
-        : []),
+      {
+        text: `${group.product} · zaobserwowana wersja ${group.version}`,
+        style: "cardTitle",
+        color: THEME.cyan,
+      },
+      paragraph(`W skanie rozpoznano komponent ${group.product} w wersji ${group.version}.`),
     ]
+    const explanations = new Map()
+    for (const item of group.items) {
+      const explanation = item.explanation?.trim()
+      if (!explanation) continue
+      const identifiers = explanations.get(explanation) || []
+      identifiers.push(item.identifier)
+      explanations.set(explanation, identifiers)
+    }
+    for (const [explanation, identifiers] of explanations) {
+      content.push(paragraph(
+        explanations.size > 1 ? `${identifiers.join(", ")}: ${explanation}` : explanation
+      ))
+    }
+    const recommendations = new Map()
+    for (const item of group.items) {
+      const recommendation = item.recommendation?.trim()
+      if (!recommendation) continue
+      const identifiers = recommendations.get(recommendation) || []
+      identifiers.push(item.identifier)
+      recommendations.set(recommendation, identifiers)
+    }
+    for (const [recommendation, identifiers] of recommendations) {
+      content.push(paragraph(
+        `${recommendations.size > 1 ? `${identifiers.join(", ")}: ` : ""}Zalecenie: ${recommendation}`,
+        "bodyMuted"
+      ))
+    }
+    for (const item of group.items) {
+      const matchStatus = item.match_status_label || "Dopasowanie do weryfikacji"
+      const status = /potencjal/iu.test(matchStatus) && !/weryfikac/iu.test(matchStatus)
+        ? `${matchStatus} — do weryfikacji`
+        : matchStatus
+      content.push(paragraph(
+        `${item.identifier} · ${status} · pewność: ${item.confidence_label || "nieustalona"} · poprawki dostawcy: ${item.backport_status_label || "nieustalone"}`,
+        "small"
+      ))
+      if (item.vendor_link) {
+        content.push({
+          text: [{
+            text: `Informacja producenta — ${item.identifier}`,
+            link: item.vendor_link,
+            color: THEME.cyan,
+            decoration: "underline",
+          }],
+          fontSize: 8.5,
+          margin: [0, 0, 0, 7],
+        })
+      }
+    }
     nodes.push({ unbreakable: true, stack: [panel(content)] })
   }
   return nodes
 }
 
-function briefScopeAndContact(model, sectionNumber) {
+function briefObservations(model) {
+  const important = Array.isArray(model.summary?.important_rows) ? model.summary.important_rows : []
+  const importantRank = new Map(important.map((row, index) => [`${row.number}\u0000${row.title}`, index]))
+  const candidates = []
+  for (const [groupIndex, group] of (model.findings || []).entries()) {
+    for (const [variantIndex, variant] of (group.variants || []).entries()) {
+      const title = variant.title || group.title || "Ustalenie"
+      if (
+        group.group === "server_technology" &&
+        /wersja|version/iu.test(title) &&
+        /podatno|vulnerab|CVE/iu.test(title)
+      ) continue
+      const key = `${group.group}\u0000${title}\u0000${variant.recommendation || ""}`.toLocaleLowerCase("pl-PL")
+      const highlighted = importantRank.get(`${group.number}\u0000${title}`)
+      candidates.push({
+        key,
+        rank: highlighted ?? important.length + groupIndex * 10 + variantIndex,
+        order: groupIndex * 100 + variantIndex,
+        groupTitle: group.title || "Pozostałe ustalenia",
+        title,
+        observation: variant.observation || "",
+        impact: variant.impact || "",
+        recommendation: variant.recommendation || "",
+      })
+    }
+  }
+  candidates.sort((left, right) => left.rank - right.rank || left.order - right.order)
+  const deduplicated = new Map()
+  for (const item of candidates) {
+    if (!deduplicated.has(item.key)) deduplicated.set(item.key, item)
+  }
+  const items = [...deduplicated.values()]
+  return {
+    items: items.slice(0, 4),
+    omittedAreas: unique(items.slice(4).map(item => item.groupTitle)),
+  }
+}
+
+function briefObservationSection(observations) {
+  if (!observations.items.length) return []
+  const nodes = [
+    sectionLabel("03 / CO JESZCZE ZAOBSERWOWANO"),
+    { text: "Co jeszcze zaobserwowano", style: "pageTitle", headlineLevel: 2 },
+  ]
+  for (const item of observations.items) {
+    const content = [
+      { text: `${item.groupTitle}: ${item.title}`, style: "cardTitle", color: THEME.cyan },
+      ...(item.observation ? [paragraph(item.observation)] : []),
+      ...(item.impact ? [paragraph(item.impact, "bodyMuted")] : []),
+      ...(item.recommendation ? [paragraph(`Co sprawdzić: ${item.recommendation}`, "bodyMuted")] : []),
+    ]
+    nodes.push({ unbreakable: true, stack: [panel(content)] })
+  }
+  if (observations.omittedAreas.length) {
+    nodes.push(paragraph(
+      `Odnotowaliśmy również uwagi w obszarach: ${observations.omittedAreas.join(", ")}. Powyżej opisaliśmy kwestie, które zalecamy sprawdzić w pierwszej kolejności.`,
+      "small"
+    ))
+  }
+  return nodes
+}
+
+function briefScopeAndContact(model, sectionNumber, forcePageBreak = true) {
   const brand = model.copy.brand
-  const company = brand.legal_name || "Codefellow Sp. z o.o."
   const contact = [
     sectionLabel(`${String(sectionNumber).padStart(2, "0")} / ZAKRES I KONTAKT`),
     { text: "Zakres i kontakt", style: "pageTitle", headlineLevel: 2 },
     paragraph(
-      "Raport przedstawia najważniejsze obserwacje z pasywnej analizy publicznie dostępnej strony. Ma charakter informacyjny i nie stanowi pełnego audytu bezpieczeństwa. Wskazane dopasowania CVE wymagają weryfikacji przez administratora serwisu.",
+      "Raport przygotowała firma Codefellow Sp. z o.o. przy użyciu narzędzia Codefellow Scout. Dokument przedstawia wybrane, najważniejsze obserwacje z pasywnej analizy publicznie dostępnej strony. Ma charakter informacyjny i nie stanowi pełnego audytu bezpieczeństwa. Wskazane dopasowania CVE wymagają weryfikacji przez administratora serwisu.",
       "bodyMuted"
     ),
     paragraph(
-      "W razie pytań dotyczących przedstawionych ustaleń prosimy o kontakt z Codefellow Sp. z o.o.",
+      "W razie pytań dotyczących przedstawionych ustaleń prosimy o kontakt.",
       "bodyMuted"
     ),
-    { text: company, style: "cardTitle", color: THEME.cyan },
+    { text: "Codefellow Sp. z o.o.", style: "cardTitle", color: THEME.cyan },
     paragraph([brand.email, brand.phone].filter(Boolean).join(" · ")),
   ]
-  if (brand.website) {
-    contact.push({
-      text: [{
-        text: text(brand.website.replace(/^https?:\/\/|\/$/gu, "")),
-        link: brand.website,
-        color: THEME.cyan,
-        decoration: "underline",
-      }],
-      style: "small",
-      margin: [0, 0, 0, 7],
-    })
-  }
-  const companyDetails = [
-    brand.address,
-    brand.nip && `NIP ${brand.nip}`,
-    brand.krs && `KRS ${brand.krs}`,
-  ].filter(Boolean).join(" · ")
-  if (companyDetails) contact.push(paragraph(companyDetails, "small"))
-  return [{ stack: contact, unbreakable: true }]
+  return [{ stack: contact, unbreakable: true, ...(forcePageBreak ? { pageBreak: "before" } : {}) }]
 }
-
 
 export function documentDefinition(model) {
   return createDocumentDefinition(model, false)
@@ -629,14 +724,22 @@ function createDocumentDefinition(model, brief) {
     })
   }
   if (brief) {
-    const hasCves = Array.isArray(model.brief_cves?.items) && model.brief_cves.items.length > 0
+    const hasCves = briefCveGroups(model).length > 0
     const company = model.copy.brand.legal_name || "Codefellow Sp. z o.o."
     nodes.push(paragraph(
       `Raport przygotowany przez ${company} przy użyciu narzędzia ${brand.name}`,
       "small"
     ))
-    if (hasCves) nodes.push(...briefCveSection(model))
-    nodes.push(...briefScopeAndContact(model, hasCves ? 3 : 2))
+    if (hasCves) {
+      const observations = briefObservations(model)
+      nodes.push(
+        ...briefCveSection(model),
+        ...briefObservationSection(observations),
+        ...briefScopeAndContact(model, observations.items.length ? 4 : 3)
+      )
+    } else {
+      nodes.push(...briefScopeAndContact(model, 2, false))
+    }
   } else {
     if (model.summary.important_rows.length) {
       nodes.push({
