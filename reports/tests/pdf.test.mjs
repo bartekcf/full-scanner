@@ -24,6 +24,8 @@ test('Searchable PDF, Polish characters, numbering and first-page incomplete cov
  assert.ok(pages.every(t=>t.replace(/Stronoskop.*|Strona \d+ \/ \d+/g,'').trim().length>100))
  assert.doesNotMatch(txt,/\{target\}|\{date\}|undefined|\bNone\b|JSON|potwierdzona luka/)
  assert.match(txt,/U-01/)
+ assert.match(txt,/scout@codefellow\.pl/)
+ assert.doesNotMatch(txt,/kontakt@codefellow\.pl/)
 })
 
 test('Brief PDF keeps the summary, qualified CVE, company contact and short pagination',async()=>{
@@ -66,7 +68,7 @@ test('Brief PDF keeps the summary, qualified CVE, company contact and short pagi
  assert.match(whiteNormalized,/WSPÓLNE ZALECENIE/)
  assert.doesNotMatch(whiteText,/Stronoskop/)
  assert.match(whitePages.at(-1),/Zakres i kontakt/)
- assert.match(whitePages.at(-1),/kontakt@codefellow\.pl/)
+ assert.match(whitePages.at(-1),/scout@codefellow\.pl/)
  assert.equal(pages.length,3)
  assert.ok(pages.every(page=>page.trim().length>100))
  assert.match(normalized,/Raport przygotowany przez Codefellow Sp\. z o\.o\. przy użyciu narzędzia Codefellow Scout/)
@@ -76,7 +78,7 @@ test('Brief PDF keeps the summary, qualified CVE, company contact and short pagi
  assert.equal((briefText.match(/Zalecenie:/gu)||[]).length,1)
  assert.match(normalized,/Potencjalne dopasowanie.*do weryfikacji/)
  assert.match(normalized,/Informacja producenta — CVE-2025-4242/)
- assert.match(normalized,/kontakt@codefellow\.pl/)
+ assert.match(normalized,/scout@codefellow\.pl/)
  assert.match(normalized,/\+48 795 309 804/)
  assert.match(normalized,/Dokument przedstawia wybrane, najważniejsze obserwacje z pasywnej analizy/)
  assert.match(normalized,/Codefellow Sp\. z o\.o\./)
@@ -88,9 +90,9 @@ test('Brief PDF keeps the summary, qualified CVE, company contact and short pagi
  const requiredScope='Raport przygotowała firma Codefellow Sp. z o.o. przy użyciu narzędzia Codefellow Scout. Dokument przedstawia wybrane, najważniejsze obserwacje z pasywnej analizy publicznie dostępnej strony. Ma charakter informacyjny i nie stanowi pełnego audytu bezpieczeństwa. Wskazane dopasowania CVE wymagają weryfikacji przez administratora serwisu. W razie pytań dotyczących przedstawionych ustaleń prosimy o kontakt.'
  assert.ok(contactPage.replace(/\s+/gu,' ').includes(requiredScope))
  assert.match(contactPage,/Zakres i kontakt/)
- assert.match(contactPage,/kontakt@codefellow\.pl/)
+ assert.match(contactPage,/scout@codefellow\.pl/)
  assert.match(contactPage,/\+48 795 309 804/)
- assert.doesNotMatch(pages.slice(0,-1).join(' '),/kontakt@codefellow\.pl|\+48 795 309 804/)
+ assert.doesNotMatch(pages.slice(0,-1).join(' '),/scout@codefellow\.pl|\+48 795 309 804/)
  assert.equal(briefDocumentDefinition(model).info.author,'Codefellow Sp. z o.o.')
  assert.equal(documentDefinition(model).info.author,'Stronoskop')
  const longDomain='www.powiat-starachowice-with-a-long-subdomain.example.gov.pl'
@@ -214,7 +216,7 @@ test('CLI preserves full output and brief skips scans without selected CVEs',asy
   assert.equal(pages.length,3)
   assert.match(pages[1],/Polityka bezpieczeństwa treści \(CSP\)/)
   assert.match(pages.at(-1),/Zakres i kontakt/)
-  assert.match(pages.at(-1),/kontakt@codefellow\.pl/)
+  assert.match(pages.at(-1),/scout@codefellow\.pl/)
   assert.match(pages.at(-1),/\+48 795 309 804/)
   const {stdout:whiteStdout}=await exec(process.execPath,['generate.mjs','--input',briefInput,'--output',briefOutput,'--brief-white'],{cwd:root})
   assert.match(whiteStdout,/Zapisane raporty: 1\. Pominięte: 2\. Błędy: 0\./)
