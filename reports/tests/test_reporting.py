@@ -147,6 +147,19 @@ class ModelTests(unittest.TestCase):
   self.assertEqual(candidate['vendor_link'],'https://bugs.php.net/bug.php?id=68665')
   self.assertEqual(candidate['confidence_label'],'średnia')
   self.assertIn('Potencjalne dopasowanie',candidate['match_status_label'])
+ def test_ignored_cve_is_omitted_from_regular_and_brief_reports(self):
+  technology={'name':'PHP','version':'8.2.4','version_status':'declared','sources':['http_headers']}
+  common={'product':'PHP','technology_name':'PHP','detected_version':'8.2.4',
+          'match_status':'potentially_affected','confidence':'medium','backport_status':'unknown',
+          'affected_range':'<=8.2.4','sources':['NVD'],'references':[]}
+  data=scan(technologies=[technology],cves=[
+   {'cve_id':'cve-2007-3205',**common},{'cve_id':'CVE-2025-1008',**common}])
+  model=build(data,C)
+  candidates=json.dumps(model['cve_candidates'])
+  self.assertNotIn('CVE-2007-3205',candidates)
+  self.assertIn('CVE-2025-1008',candidates)
+  brief=brief_cve_candidates(data)
+  self.assertEqual([row['identifier'] for row in brief['items']],['CVE-2025-1008'])
  def test_brief_does_not_infer_cves_from_partial_versions(self):
   result=brief_cve_candidates({'technologies':[
    {'name':'PHP','version':'5.6','version_status':'declared','sources':['http_headers']}

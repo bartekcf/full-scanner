@@ -35,7 +35,7 @@ test('Brief PDF keeps the summary, qualified CVE, company contact and short pagi
  const scan={...base,findings:[finding],technologies:[{
   name:'PHP',version:'8.2.4',version_status:'declared',sources:['http_headers'],version_conflict:false,
   cpe:'cpe:2.3:a:php:php:8.2.4:*:*:*:*:*:*:*',
- }],cves:[cve,{...cve,cve_id:'CVE-2025-4243',cvss_score:6.5},
+ }],cves:[{...cve,cve_id:'CVE-2007-3205',cvss_score:10},cve,{...cve,cve_id:'CVE-2025-4243',cvss_score:6.5},
   {...cve,cve_id:'CVE-2025-4244',cvss_score:5.5},
   {...cve,cve_id:'CVE-2025-4245',cvss_score:4.5}]}
  const model=await prepareBriefModel(scan)
@@ -46,6 +46,8 @@ test('Brief PDF keeps the summary, qualified CVE, company contact and short pagi
  const whiteNormalized=whiteText.replace(/\s+/gu,' ')
  const pages=briefText.split('\f').filter(page=>page.trim())
  const normalized=briefText.replace(/\s+/gu,' ')
+ assert.doesNotMatch(normalized,/CVE-2007-3205/)
+ assert.doesNotMatch(whiteNormalized,/CVE-2007-3205/)
  assert.ok(whitePages.length>=3&&whitePages.length<=4)
  assert.ok(whitePages.every(page=>page.trim().length>100))
  assert.match(whitePages[0],/example\.org/)

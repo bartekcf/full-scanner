@@ -7,6 +7,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from .catalog import Catalog, identifier
 from .privacy import clean, safe_url, extract, csp, OMITTED
+from .cve_policy import is_ignored_cve
 
 VERSION='2.0.0'
 RISK={'0':'info','1':'low','2':'medium','3':'high','4':'critical','informational':'info','information':'info','info':'info','low':'low','medium':'medium','high':'high','critical':'critical'}
@@ -124,7 +125,7 @@ def cve_candidates(scan):
     candidates=array(scan,'cves')
     if len(candidates)>20000:raise ValueError('Too many CVE candidates')
     for c in candidates:
-        if not isinstance(c,dict):continue
+        if not isinstance(c,dict) or is_ignored_cve(c):continue
         product=clean(c.get('product') or c.get('technology_name'),100) or 'Produkt nieokreślony'
         version=clean(c.get('detected_version'),50) or 'Brak pełnej wersji'
         key=(product,version)
@@ -214,7 +215,7 @@ def brief_cve_candidates(scan):
 
     candidates=[]
     weak_versions,conflicts=set(),set()
-    cve_rows=array(scan,'cves')
+    cve_rows=[record for record in array(scan,'cves') if not is_ignored_cve(record)]
     for record in cve_rows:
         if not isinstance(record,dict):continue
         match_status=record.get('match_status')

@@ -21,6 +21,7 @@ CISA_KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_v
 EPSS_URL = "https://api.first.org/data/v1/epss"
 OSV_QUERY_URL = "https://api.osv.dev/v1/query"
 GITHUB_ADVISORIES_URL = "https://api.github.com/advisories"
+_IGNORED_CVE_IDS = frozenset({"CVE-2007-3205"})
 _OSV_PACKAGES: dict[str, tuple[str, str, str]] = {
     "react": ("npm", "react", "npm"),
     "next.js": ("npm", "next", "npm"),
@@ -684,6 +685,8 @@ class CveIntelligence:
                 for identifier in record.get("advisory_ids", [])
                 if isinstance(identifier, str) and identifier
             )
+            if any(identifier.strip().upper() in _IGNORED_CVE_IDS for identifier in identifiers):
+                return
             existing = next(
                 (record_index[(technology_name, identifier)] for identifier in identifiers
                  if (technology_name, identifier) in record_index),
